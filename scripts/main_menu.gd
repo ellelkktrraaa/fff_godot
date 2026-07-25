@@ -30,6 +30,7 @@ extends Control
 @onready var hard_btn = $DiffSelect/DiffPanel/DiffButtonRow/HardBtn
 @onready var diff_back_btn = $DiffSelect/DiffPanel/DiffBackBtn
 @onready var diff_title = $DiffSelect/DiffPanel/DiffTitle
+var hell_btn: Button
 
 var selected_char := "knight"
 var chars_initialized := false
@@ -43,6 +44,7 @@ const IMG_BG = preload("res://assets/无标题102_20260722154610.png")
 const IMG_DIFF_EASY = preload("res://assets/36-20260705005735.png")
 const IMG_DIFF_MEDIUM = preload("res://assets/38-20260705005805.png")
 const IMG_DIFF_HARD = preload("res://assets/39-20260705005825.png")
+const IMG_DIFF_HELL = preload("res://assets/无标题88_20260712153232.png")
 
 
 func _ready():
@@ -228,6 +230,16 @@ func _style_diff_buttons():
 	medium_btn.texture_pressed = IMG_DIFF_MEDIUM
 	hard_btn.texture_normal = IMG_DIFF_HARD
 	hard_btn.texture_pressed = IMG_DIFF_HARD
+	
+	# Create hell button programmatically
+	hell_btn = Button.new()
+	hell_btn.icon = IMG_DIFF_HELL
+	hell_btn.expand_icon = true
+	hell_btn.flat = true
+	hell_btn.custom_minimum_size = Vector2(120, 120)
+	hell_btn.pressed.connect(_on_hell_pressed)
+	easy_btn.get_parent().add_child(hell_btn)
+	
 	diff_title.add_theme_color_override("font_color", Color(1.0, 0.843, 0.0))
 	_style_action_button(diff_back_btn, Color(0.6, 0.6, 0.6), "← 返回")
 
@@ -387,6 +399,9 @@ func _on_medium_pressed():
 
 func _on_hard_pressed():
 	GameWorld.difficulty = "hard"; _show_char_select()
+
+func _on_hell_pressed():
+	GameWorld.difficulty = "hell"; _show_char_select()
 
 func _on_diff_back_pressed():
 	diff_select.visible = false

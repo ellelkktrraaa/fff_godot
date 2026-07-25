@@ -32,6 +32,7 @@ static func get_config() -> Dictionary:
 				{"name": "陨星·寂灭（大招）", "desc": "只能在跳跃/飞行状态下释放。召唤一颗巨大陨石从天而降，撞击地面造成大范围（半径 400 像素）爆炸，造成 40 点伤害。释放后魔女进入悬停施法状态，直到陨石落地。", "meta": "消耗：100 能量（需至少 120 能量） ｜ 冷却：无"},
 			]
 		},
+		"ai_profile": {"ideal_range": [100, 350], "kite": true, "prefer_air": true},
 	}
 
 static func create_skills() -> Array:

@@ -4,6 +4,10 @@ class_name RoseCharacter
 const ROSE_SLASH_IMG = preload("res://assets/%E6%97%A0%E6%A0%87%E9%A2%9893_20260721203233.png")
 const ROSE_SKILL1_IMG = preload("res://assets/无标题108_20260722172633.png")
 const ROSE_SKILL2_IMG = preload("res://assets/无标题96_20260721235635.png")
+const ROSE_ENH_SLASH1 = preload("res://assets/%E6%97%A0%E6%A0%87%E9%A2%9894_20260721204629.png")
+const ROSE_ENH_SLASH2 = preload("res://assets/%E6%97%A0%E6%A0%87%E9%A2%9894_20260721204754.png")
+const ROSE_ENH_SLASH3 = preload("res://assets/%E6%97%A0%E6%A0%87%E9%A2%9894_20260721204800.png")
+const ROSE_ENH_SLASH4 = preload("res://assets/%E6%97%A0%E6%A0%87%E9%A2%9894_20260721204804.png")
 const ROSE_ANI_DIR = "res://assets/char_ani/rose/"
 
 static func get_config() -> Dictionary:
@@ -21,6 +25,7 @@ static func get_config() -> Dictionary:
 			"attack": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "attack/", "rose_attack_f_", [{"index": 1, "duration": 1.0}], false),
 			"skill1": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill1/", "rose_skill1_f_", [{"index": 1, "duration": 2.0}], false),
 			"skill2": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill2/", "rose_skill2_f_", [{"index": 1, "duration": 3.0}], false),
+			"skill2_enhanced": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill2_enhanced/", "rose_skill2_enhanced_f_", [{"index": 1, "duration": 3.0}], false),
 			"ult": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "ult/", "rose_ult_f_", [
 				{"index": 1, "duration": 0.797}, {"index": 2, "duration": 0.114}, {"index": 3, "duration": 0.341},
 				{"index": 4, "duration": 0.569}, {"index": 5, "duration": 0.683}, {"index": 6, "duration": 1.0}
@@ -44,7 +49,7 @@ static func create_skills() -> Array:
 	return [
 		Skill.new("skill1", "血之月华", 480, 0, func(owner: Fighter): return (owner.energy >= 15 or owner.blood_abyss >= 20.0) and not owner.dashing, Callable(_skill1)),
 		Skill.new("skill2", "夜翼瞬袭", 720, 0, func(owner: Fighter): return (owner.energy >= 20 or owner.blood_abyss >= 20.0) and not owner.dashing and not owner.rose_skill2_active, Callable(_skill2)),
-		Skill.new("ult", "暗夜华尔兹", 300, 100, Callable(), Callable(_ult)),
+		Skill.new("ult", "暗夜华尔兹", 600, 100, Callable(), Callable(_ult)),
 	]
 
 static func _is_blood_enhanced(owner: Fighter) -> bool:
@@ -52,8 +57,12 @@ static func _is_blood_enhanced(owner: Fighter) -> bool:
 
 static func _skill1(owner: Fighter) -> Dictionary:
 	var enhanced = _is_blood_enhanced(owner)
+	var skill = owner.get_skill("skill1")
 	
 	if enhanced:
+		if owner.energy < 20 or owner.blood_abyss < 20.0:
+			return {"success": false}
+		owner.energy -= 20
 		owner.blood_abyss -= 20.0
 	else:
 		if owner.energy < 15:
@@ -70,22 +79,32 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	owner.dash_dir = dir
 	owner.dash_speed = 6.0
 	owner.dash_damage_dealt = true  # Skip default dash damage, use grab logic
-	owner.image_state = "skill1"
+	owner.set_animation_state("skill1")
 	
-	# Create slash trail behind the character
-	var slash = {
-		"x": owner.pos_x + (owner.w if dir == 1 else -slash_w),
-		"y": owner.pos_y - 4,
-		"w": slash_w,
-		"h": owner.h + 8,
-		"dir": dir,
-		"hit_dealt": false,
-		"timer": 60,  # 1 second
-		"damage": slash_damage,
-		"owner": owner,  # Track who created this slash
-	}
-	GameWorld.rose_slash_trails.append(slash)
-	owner.rose_grab_center_x = slash["x"] + slash["w"] / 2.0  # Pin enemy to slash center
+	if enhanced:
+		# Schedule 4 sequential slashes (spawned in character_systems after dash)
+		if skill: skill.cd = 900  # 15 second cooldown
+		owner.rose_skill1_enhanced_slashes = [
+			{"img": ROSE_ENH_SLASH1, "timer": 80},
+			{"img": ROSE_ENH_SLASH2, "timer": 80},
+			{"img": ROSE_ENH_SLASH3, "timer": 80},
+			{"img": ROSE_ENH_SLASH4, "timer": 80},
+		]
+		owner.rose_skill1_slash_spawn_timer = 0
+	else:
+		# Normal: create single slash trail behind the character
+		var slash = {
+			"x": owner.pos_x + (owner.w if dir == 1 else -slash_w),
+			"y": owner.pos_y - 4,
+			"w": slash_w,
+			"h": owner.h + 8,
+			"dir": dir,
+			"hit_dealt": false,
+			"timer": 60,  # 1 second
+			"damage": slash_damage,
+			"owner": owner,  # Track who created this slash
+		}
+		GameWorld.rose_slash_trails.append(slash)
 	
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 30, Color(1.0, 0.1, 0.1), 5, 7, "star")
 	return {"success": true}
@@ -102,9 +121,9 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		owner.rose_skill2_enhanced = true
 		owner.rose_skill2_fly_timer = 180  # 3 seconds
 		owner.rose_skill2_damage_tick = 0
-		owner.rose_skill2_tick_damage = 3.0
+		owner.rose_skill2_tick_damage = 20.0 / 15.0
 		owner.is_invincible = true
-		owner.image_state = "skill2"
+		owner.set_animation_state("skill2_enhanced")
 	else:
 		# Normal: dash forward (1.2s, 20 energy, 12s cd)
 		if owner.energy < 20:
@@ -121,8 +140,8 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		owner.rose_skill2_active = true
 		owner.rose_skill2_enhanced = false
 		owner.rose_skill2_damage_tick = 0
-		owner.rose_skill2_tick_damage = 3.0
-		owner.image_state = "skill2"
+		owner.rose_skill2_tick_damage = 2.5
+		owner.set_animation_state("skill2")
 	
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 25, Color(0.6, 0.1, 0.6), 4, 6, "star")
 	return {"success": true}

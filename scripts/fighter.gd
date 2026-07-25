@@ -172,6 +172,15 @@ var rose_skill2_tick_damage: float = 3.0
 var rose_skill2_enhanced: bool = false
 var rose_skill2_fly_timer: int = 0
 var rose_grab_center_x: float = -9999.0
+var rose_skill1_enhanced_slashes: Array = []  # pending slashes for enhanced skill1
+var rose_skill1_slash_spawn_timer: int = 0
+var rose_blood_abyss_suppressed: bool = false
+
+# Dragon Knight
+var dragon_scales_active: bool = false
+var dragon_scales_timer: int = 0
+var dragon_form_active: bool = false
+var dragon_form_timer: int = 0
 
 # Forced skill timer
 var forced_skill_timer: int = 0
@@ -350,6 +359,19 @@ func apply_physics():
 			energy = maxf(0, energy - 10)
 			if energy <= 0:
 				holy_empower_active = false
+	# Dragon Knight: 龙鳞护体计时
+	if dragon_scales_active:
+		dragon_scales_timer -= 1
+		if dragon_scales_timer <= 0:
+			dragon_scales_active = false
+	# Dragon Knight: 龙化形态计时与能量消耗
+	if dragon_form_active:
+		dragon_form_timer += 1
+		if dragon_form_timer >= 60:
+			dragon_form_timer = 0
+			energy = maxf(0, energy - 10)
+			if energy <= 0:
+				dragon_form_active = false
 	update_statuses()
 	for s in skills:
 		s.update()
@@ -372,7 +394,9 @@ func apply_physics():
 	if attacking and attack_timer <= 0 and not charging_attack:
 		attacking = false
 		state = "idle"
-	if dashing or charging_skill1 or charging:
+	if image_state.begins_with("skill") and not attacking:
+		pass  # Keep skill-specific animation state (set by character logic)
+	elif dashing or charging_skill1 or charging:
 		set_animation_state("charge")
 	elif attacking:
 		set_animation_state("attack")
@@ -423,6 +447,8 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 		base_dmg += attacker.attack_boost
 		if attacker.holy_empower_active:
 			base_dmg += 5
+		if attacker.dragon_form_active:
+			base_dmg += 8
 
 	# 神圣壁垒：吸收伤害并转化为能量（1:3）
 	if target.divine_shield_active:
@@ -447,6 +473,15 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 		final_dmg = maxf(1.0, floorf(base_dmg * 0.5))
 		knockback = false
 
+	# 龙鳞护体：减免40%伤害
+	if target.dragon_scales_active:
+		final_dmg = maxf(1.0, floorf(final_dmg * 0.6))
+
+	# 龙化形态：减免30%伤害，免疫击退
+	if target.dragon_form_active:
+		final_dmg = maxf(1.0, floorf(final_dmg * 0.7))
+		knockback = false
+
 	# 暴击伤害倍率
 	if is_critical:
 		final_dmg = floorf(final_dmg * 1.5)
@@ -460,8 +495,10 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 	target.damage_flash = 10
 	target.hit_cooldown = 15
 	# Blood Abyss: attacker gains blood_abyss equal to damage dealt
-	if attacker and attacker.char_id == "rose":
+	if attacker and attacker.char_id == "rose" and not attacker.rose_blood_abyss_suppressed:
 		attacker.blood_abyss = minf(40.0, attacker.blood_abyss + final_dmg)
+	if attacker and attacker.rose_blood_abyss_suppressed:
+		attacker.rose_blood_abyss_suppressed = false
 	if knockback and attacker and attacker != target:
 		target.vy = -4
 		target.vx = (attacker.facing if attacker.facing != 0 else (1 if target.is_player else -1)) * 5

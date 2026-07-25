@@ -20,4 +20,5 @@ const AI_PRESETS := {
 	"easy": {"react": 600, "aggro": 0.3, "dodge": 0.1, "skill_rate": 0.15, "move_speed": 0.75, "jump_rate": 0.0},
 	"medium": {"react": 350, "aggro": 0.5, "dodge": 0.25, "skill_rate": 0.3, "move_speed": 0.9, "jump_rate": 0.02},
 	"hard": {"react": 120, "aggro": 0.8, "dodge": 0.4, "skill_rate": 0.6, "move_speed": 1.1, "jump_rate": 0.05},
+	"hell": {"react": 45, "aggro": 0.95, "dodge": 0.6, "skill_rate": 0.9, "move_speed": 1.35, "jump_rate": 0.1},
 }

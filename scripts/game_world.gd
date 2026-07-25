@@ -43,6 +43,8 @@ var platforms: Array = []
 
 # Camera
 var camera := {"x": 0.0}
+var screen_shake_intensity: float = 0.0
+var screen_shake_duration: int = 0
 
 # Pickup timer
 var pickup_timer := 0.0

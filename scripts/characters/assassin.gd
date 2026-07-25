@@ -90,6 +90,9 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	var start_x = owner.pos_x + (owner.w if dir==1 else 0)
 	var start_y = owner.pos_y + 20
 	GameWorld.projectiles.append({"x":start_x,"y":start_y,"w":60,"h":30,"vx":8*dir,"vy":0,"life":240,"damage":15,"owner":owner,"type":"assassin_skill2","color":Color(0.53,0.27,0.8),"reflected":false,"piercing":true,"hit_targets":[],"img":PROJ_SLASH2})
+	# Screen shake
+	GameWorld.screen_shake_intensity = 8.0
+	GameWorld.screen_shake_duration = 12
 	return {"success": true}
 
 static func _ult(owner: Fighter) -> Dictionary:

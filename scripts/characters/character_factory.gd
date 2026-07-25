@@ -9,6 +9,7 @@ const Assassin = preload("res://scripts/characters/assassin.gd")
 const Shadowwarrior = preload("res://scripts/characters/shadowwarrior.gd")
 const Evoker = preload("res://scripts/characters/evoker.gd")
 const Rose = preload("res://scripts/characters/rose.gd")
+const DragonKnight = preload("res://scripts/characters/dragon_knight.gd")
 
 static var _char_registry := {
 	"knight": { "cls": Knight, "config": null },
@@ -20,6 +21,7 @@ static var _char_registry := {
 	"shadowwarrior": { "cls": Shadowwarrior, "config": null },
 	"evoker": { "cls": Evoker, "config": null },
 	"rose": { "cls": Rose, "config": null },
+	# "dragon_knight": { "cls": DragonKnight, "config": null },  # 暂时移出
 }
 
 static func get_config(char_id: String) -> Dictionary:

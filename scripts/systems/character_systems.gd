@@ -127,7 +127,7 @@ static func update_rose_logic():
 		# Skill2: bat swarm logic
 		if f.rose_skill2_active:
 			f.is_invincible = true
-			f.image_state = "skill2"
+			f.set_animation_state("skill2_enhanced" if f.rose_skill2_enhanced else "skill2")
 			
 			if f.rose_skill2_enhanced:
 				# Enhanced: free flight via joystick (3 seconds)
@@ -145,6 +145,7 @@ static func update_rose_logic():
 					if dist < 80:
 						if f.rose_skill2_damage_tick >= 12:
 							f.rose_skill2_damage_tick = 0
+							f.rose_blood_abyss_suppressed = true
 							Fighter.apply_damage(enemy, f.rose_skill2_tick_damage, f, false, Color(0.6, 0.1, 0.6))
 				# Timer countdown
 				f.rose_skill2_fly_timer -= 1
@@ -174,24 +175,67 @@ static func update_rose_logic():
 		# Skill1: grab effect — pin enemy to slash center
 		elif f.dashing:
 			if f.image_state != "skill1":
-				f.image_state = "skill1"
+				f.set_animation_state("skill1")
 			var enemy = GameWorld.get_opponent(f)
 			if enemy and enemy.hp > 0:
 				if f.get_hit_box().intersects(enemy.get_hit_box()):
-					# Pin enemy to the center of the slash trail
+					# Pin enemy to the center of the slash trail (set grab center on first hit)
+					if f.rose_grab_center_x < -9998:
+						if f.rose_skill1_enhanced_slashes.size() > 0:
+							# Enhanced: no pre-existing trail, compute from player position
+							f.rose_grab_center_x = f.pos_x + f.w / 2.0 + f.facing * (f.w + 220) / 2.0
+						else:
+							# Normal: find pre-existing slash trail
+							for trail in GameWorld.rose_slash_trails:
+								if trail.get("owner") == f:
+									f.rose_grab_center_x = trail["x"] + trail["w"] / 2.0
+									break
 					enemy.pos_x = f.rose_grab_center_x - enemy.w / 2.0
 					enemy.vx = 0
 					enemy.vy = 0
 		
-		# Continue grab after dash ends (slash persists for 1 second)
-		if f.rose_grab_center_x > -9998 and GameWorld.rose_slash_trails.size() > 0:
-			var enemy = GameWorld.get_opponent(f)
-			if enemy and enemy.hp > 0:
-				enemy.pos_x = f.rose_grab_center_x - enemy.w / 2.0
-				enemy.vx = 0
-				enemy.vy = 0
-		elif f.rose_grab_center_x > -9998 and GameWorld.rose_slash_trails.size() == 0:
-			f.rose_grab_center_x = -9999.0  # Release grab
+		# Enhanced skill1: spawn sequential slashes after dash ends
+		if f.rose_skill1_enhanced_slashes.size() > 0 and not f.dashing:
+			# If grab didn't connect, clear pending slashes
+			if f.rose_grab_center_x < -9998:
+				f.rose_skill1_enhanced_slashes.clear()
+			else:
+				f.rose_skill1_slash_spawn_timer += 1
+				if f.rose_skill1_slash_spawn_timer % 20 == 1:
+					var sdata = f.rose_skill1_enhanced_slashes.pop_front()
+					var slash_w = 220
+					var dir = f.facing
+					var slash = {
+						"x": f.rose_grab_center_x - slash_w / 2.0,
+						"y": f.pos_y - 4,
+						"w": slash_w,
+						"h": f.h + 8,
+						"dir": dir,
+						"hit_dealt": false,
+						"timer": sdata["timer"],
+						"damage": 4.5,
+						"owner": f,
+						"img": sdata["img"],
+						"enhanced": true,
+					}
+					GameWorld.rose_slash_trails.append(slash)
+		
+		# Continue grab — active while any slash trail owned by this fighter exists or pending
+		if f.rose_grab_center_x > -9998:
+			var has_active = false
+			for trail in GameWorld.rose_slash_trails:
+				if trail.get("owner") == f:
+					has_active = true
+					break
+			var has_pending = f.rose_skill1_enhanced_slashes.size() > 0
+			if has_active or has_pending:
+				var enemy = GameWorld.get_opponent(f)
+				if enemy and enemy.hp > 0:
+					enemy.pos_x = f.rose_grab_center_x - enemy.w / 2.0
+					enemy.vx = 0
+					enemy.vy = 0
+			else:
+				f.rose_grab_center_x = -9999.0  # Release grab
 
 static func update_active_overlays():
 	var to_remove: Array = []
@@ -226,6 +270,8 @@ static func update_rose_trails():
 			if target and target.hp > 0:
 				var hitbox = Rect2(trail["x"], trail["y"], trail["w"], trail["h"])
 				if hitbox.intersects(target.get_hit_box()):
+					if trail.get("enhanced", false):
+						slash_owner.rose_blood_abyss_suppressed = true
 					Fighter.apply_damage(target, trail.get("damage", 10), slash_owner)
 					trail["hit_dealt"] = true
 	for t in to_remove:

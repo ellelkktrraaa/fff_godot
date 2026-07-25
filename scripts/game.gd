@@ -147,6 +147,11 @@ func _update():
 	var target_cam = GameWorld.player.pos_x - 400.0
 	target_cam = clampf(target_cam, 0, 2400 - 800)
 	GameWorld.camera.x += (target_cam - GameWorld.camera.x) * 0.1
+	# Screen shake
+	if GameWorld.screen_shake_duration > 0:
+		GameWorld.screen_shake_duration -= 1
+	else:
+		GameWorld.screen_shake_intensity = 0.0
 
 func _apply_physics_all():
 	# Time stop check — skip physics if any entity has time_stop active
@@ -162,6 +167,9 @@ func _apply_physics_all():
 # ===== Drawing =====
 func _draw():
 	var cam_x = GameWorld.camera.x
+	# Apply screen shake offset
+	if GameWorld.screen_shake_intensity > 0:
+		cam_x += randf_range(-GameWorld.screen_shake_intensity, GameWorld.screen_shake_intensity)
 	var font = ThemeDB.fallback_font
 
 	# 1. drawMap()
@@ -304,7 +312,8 @@ func _draw():
 	for trail in GameWorld.rose_slash_trails:
 		var tx = trail["x"] - cam_x
 		if tx > -200 and tx < Constants.W + 200:
-			draw_texture_rect(ROSE_SLASH_IMG, Rect2(tx, trail["y"], trail["w"], trail["h"]), false, Color(1, 1, 1, 0.85))
+			var tex = trail.get("img", ROSE_SLASH_IMG)
+			draw_texture_rect(tex, Rect2(tx, trail["y"], trail["w"], trail["h"]), false, Color(1, 1, 1, 0.85))
 
 	# 11.6 Assassin dimensional slash
 	for f in GameWorld.entities:

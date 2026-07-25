@@ -29,6 +29,7 @@ static func get_config() -> Dictionary:
 				{"name": "圣佑（大招）", "desc": "需满圣光值释放。进入强化状态，伤害 +5，受伤减半，免疫击飞，持续消耗圣光值（15 点 / 秒）。", "meta": "消耗：15 圣光 / 秒 ｜ 冷却：无"},
 			]
 		},
+		"ai_profile": {"ideal_range": [0, 130], "kite": false},
 	}
 
 static func create_skills() -> Array:
