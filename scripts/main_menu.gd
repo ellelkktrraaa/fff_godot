@@ -438,9 +438,6 @@ func _on_back_pressed():
 	char_select.visible = false
 	diff_select.visible = true
 
-func _on_exit_pressed():
-	get_tree().quit()
-
 func _on_title_clicked(event: InputEvent):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_title_click_count += 1
@@ -449,6 +446,9 @@ func _on_title_clicked(event: InputEvent):
 			GameWorld.infinite_energy = not GameWorld.infinite_energy
 			var status = "开启" if GameWorld.infinite_energy else "关闭"
 			_show_toast("作弊：" + status)
+
+func _on_exit_pressed():
+	get_tree().quit()
 
 func _on_start_pressed():
 	get_tree().change_scene_to_file("res://scenes/game.tscn")

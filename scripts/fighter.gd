@@ -172,6 +172,8 @@ var rose_skill2_tick_damage: float = 3.0
 var rose_skill2_enhanced: bool = false
 var rose_skill2_fly_timer: int = 0
 var rose_grab_center_x: float = -9999.0
+var rose_skill1_enhanced_slashes: Array = []  # pending slashes for enhanced skill1
+var rose_skill1_slash_spawn_timer: int = 0
 
 # Forced skill timer
 var forced_skill_timer: int = 0
@@ -549,3 +551,16 @@ static func reflect_projectile(proj: Dictionary, defender: Fighter) -> bool:
 	emit_particles(proj["x"] + proj["w"] / 2.0, proj["y"] + proj["h"] / 2.0, 25, Color(1.0, 0.867, 0.267), 5, 7, "star", 1.2)
 	AudioManager.play_sound("parry")
 	return true
+
+static func apply_movement(f: Fighter, mx: int, max_spd: float):
+	if not f.has_status("frozen") and not f.dashing:
+		f.vx += mx * 0.25
+		if absf(f.vx) > max_spd: f.vx = max_spd * signf(f.vx)
+
+static func update_state(f: Fighter, mx: int):
+	if f.grounded and mx == 0 and not f.attacking and not f.dashing:
+		f.state = "idle"
+	elif f.grounded and mx != 0 and not f.attacking and not f.dashing:
+		f.state = "walk"
+	if f.attacking and f.attack_timer <= 0:
+		f.attacking = false; f.state = "idle"

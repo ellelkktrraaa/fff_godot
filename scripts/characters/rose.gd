@@ -103,7 +103,8 @@ static func update_systems(f: Fighter):
 	# Skill2: bat swarm
 	if f.rose_skill2_active:
 		f.is_invincible = true
-		f.image_state = "skill2"
+		if f.image_state != "skill2" and f.image_state != "skill2_enhanced":
+			f.set_animation_state("skill2")
 		if f.rose_skill2_enhanced:
 			f.vx = 0; f.vy = 0
 			var jd = GameWorld.rose_joystick_dir
@@ -144,7 +145,7 @@ static func update_systems(f: Fighter):
 	# Skill1: grab
 	elif f.dashing:
 		if f.image_state != "skill1":
-			f.image_state = "skill1"
+			f.set_animation_state("skill1")
 		var enemy = GameWorld.get_opponent(f)
 		if enemy and enemy.hp > 0 and f.rose_grab_center_x > -9998:
 			# 仅在冲刺路径附近小范围抓取
@@ -291,6 +292,9 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	if enhanced:
 		# Enhanced: bat swarm free flight (3s, 30 energy, 18s cd)
 		owner.blood_abyss -= 20.0
+		if owner.energy < 20:
+			return {"success": false}
+		owner.energy -= 20
 		if skill: skill.cd = 1080  # 18 seconds
 		owner.rose_skill2_active = true
 		owner.rose_skill2_enhanced = true

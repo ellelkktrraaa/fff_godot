@@ -38,3 +38,25 @@ static func create_skills(char_id: String) -> Array:
 	if entry.is_empty():
 		return []
 	return entry["cls"].create_skills()
+
+## 调度角色输入处理（替代 InputHandler 中的 match char_id）
+static func handle_input(char_id: String, fighter: Fighter, keys: Dictionary) -> int:
+	var entry = _char_registry.get(char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("handle_input"):
+		return cls.handle_input(fighter, keys)
+	return 0
+
+## 调度角色专属系统更新（替代 CharacterSystems 中的硬编码函数）
+static func update_char_systems(fighter: Fighter):
+	var entry = _char_registry.get(fighter.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("update_systems"):
+		cls.update_systems(fighter)
+
+## 调用 rose 的刀光拖尾更新（跨实体逻辑）
+static func call_rose_trails():
+	var entry = _char_registry.get("rose", {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("update_rose_trails"):
+		cls.update_rose_trails()

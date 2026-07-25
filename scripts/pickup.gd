@@ -36,6 +36,8 @@ func apply_effect(target: Fighter):
 	match type:
 		"energy":
 			target.energy = minf(target.max_energy, target.energy + 20)
+			if target.char_id == "archer":
+				target.arrows = mini(target.max_arrows, target.arrows + 5)
 
 		"health":
 			target.hp = minf(target.max_hp, target.hp + 20)

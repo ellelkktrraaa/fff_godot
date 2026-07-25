@@ -11,6 +11,7 @@ static func update_player_input(world, keys: Dictionary):
 static func _handle_char_input(p: Fighter, keys: Dictionary):
 	match p.char_id:
 		"shadowwarrior": CharacterFactory.handle_input(p.char_id, p, keys)
+		"rose": CharacterFactory.handle_input(p.char_id, p, keys)
 		"knight": _input_knight(p, keys)
 		"mage": _input_mage(p, keys)
 		"archer": _input_archer(p, keys)
@@ -18,7 +19,6 @@ static func _handle_char_input(p: Fighter, keys: Dictionary):
 		"witch": _input_witch(p, keys)
 		"assassin": _input_assassin(p, keys)
 		"evoker": _input_evoker(p, keys)
-		"rose": _input_rose(p, keys)
 
 static func _input_knight(p: Fighter, keys: Dictionary):
 	var mx = 0
@@ -284,14 +284,7 @@ static func _input_rose(p: Fighter, keys: Dictionary):
 	_update_state(p, mx)
 
 static func _apply_movement(p: Fighter, mx: int, max_spd: float):
-	if not p.has_status("frozen") and not p.dashing:
-		p.vx += mx * 0.25
-		if absf(p.vx) > max_spd: p.vx = max_spd * signf(p.vx)
+	Fighter.apply_movement(p, mx, max_spd)
 
 static func _update_state(p: Fighter, mx: int):
-	if p.grounded and mx == 0 and not p.attacking and not p.dashing:
-		p.state = "idle"
-	elif p.grounded and mx != 0 and not p.attacking and not p.dashing:
-		p.state = "walk"
-	if p.attacking and p.attack_timer <= 0:
-		p.attacking = false; p.state = "idle"
+	Fighter.update_state(p, mx)

@@ -154,11 +154,9 @@ func _update():
 	FlameZoneSystem.update_flame_zones()
 	SlowSystem.update_slow()
 	PickupSystem.update_pickups_and_end()
-	CharacterSystems.update_assassin_logic()
-	CharacterSystems.update_shadowwarrior_logic()
-	CharacterSystems.update_rose_logic()
+	CharacterSystems.update_characters()
 	CharacterSystems.update_active_overlays()
-	CharacterSystems.update_rose_trails()
+	CharacterFactory.call_rose_trails()
 	EvokerSystem.update()
 	# Camera
 	var target_cam = GameWorld.player.pos_x - 400.0
@@ -325,7 +323,20 @@ func _draw():
 	for trail in GameWorld.rose_slash_trails:
 		var tx = trail["x"] - cam_x
 		if tx > -200 and tx < Constants.W + 200:
-			draw_texture_rect(ROSE_SLASH_IMG, Rect2(tx, trail["y"], trail["w"], trail["h"]), false, Color(1, 1, 1, 0.85))
+			var tex: Texture2D = null
+			var trail_anim: FrameAnimation = trail.get("anim")
+			if trail_anim:
+				tex = trail_anim.get_current_texture()
+			if not tex:
+				tex = trail.get("img", ROSE_SLASH_IMG)
+			if tex:
+				var dir = trail.get("dir", 1)
+				if dir < 0:
+					draw_set_transform(Vector2(tx + trail["w"], trail["y"]), 0.0, Vector2(-1, 1))
+					draw_texture_rect(tex, Rect2(0, 0, trail["w"], trail["h"]), false, Color(1, 1, 1, 0.85))
+					draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+				else:
+					draw_texture_rect(tex, Rect2(tx, trail["y"], trail["w"], trail["h"]), false, Color(1, 1, 1, 0.85))
 
 	# 11.6 Assassin dimensional slash
 	for f in GameWorld.entities:

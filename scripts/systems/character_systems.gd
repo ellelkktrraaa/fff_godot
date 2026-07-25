@@ -1,6 +1,12 @@
 class_name CharacterSystems
 
-# ===== Character-Specific Logic =====
+## 通用调度：遍历所有实体，调用各自的 update_systems
+static func update_characters():
+	for f in GameWorld.entities:
+		if f.hp > 0:
+			CharacterFactory.update_char_systems(f)
+
+# ===== Character-Specific Logic (遗留代码，逐步迁移到各角色脚本中) =====
 
 static func update_assassin_logic():
 	for f in GameWorld.entities:
