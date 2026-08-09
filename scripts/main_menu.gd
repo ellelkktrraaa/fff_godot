@@ -1153,6 +1153,7 @@ func _rebuild_slot_bar():
 		# 槽位面板
 		var panel = PanelContainer.new()
 		panel.custom_minimum_size = Vector2(96, 28)
+		panel.gui_input.connect(_on_slot_random_clicked.bind(i))  # 右键点击槽位 → 随机选择天赋
 		
 		var hbox = HBoxContainer.new()
 		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1197,6 +1198,37 @@ func _on_slot_remove(slot_index: int):
 	if slot_index < GameWorld.talent_pool.size():
 		GameWorld.talent_pool[slot_index] = ""
 		_populate_talents()
+
+## 右键点击携带天赋框：随机选择该槽位可用的天赋
+func _on_slot_random_clicked(event: InputEvent, slot_index: int):
+	if not (event is InputEventMouseButton and event.pressed):
+		return
+	if event.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	# 槽位 0 为主动，1/2 为被动；battle_frenzy 占 2 格仅在两被动槽都空时可选
+	var is_skill_slot = (slot_index == 0)
+	var pool: Array = []
+	for tid in TalentPool.get_all_ids():
+		var meta = TalentPool.get_metadata(tid)
+		if meta.get("is_skill", false) == is_skill_slot:
+			if tid == "battle_frenzy":
+				if GameWorld.talent_pool[1] == "" and GameWorld.talent_pool[2] == "":
+					pool.append(tid)
+			else:
+				pool.append(tid)
+	if pool.is_empty():
+		_show_toast("没有可用的随机天赋喵~")
+		return
+	var tid = pool[randi() % pool.size()]
+	if is_skill_slot:
+		GameWorld.talent_pool[0] = tid
+	elif tid == "battle_frenzy":
+		GameWorld.talent_pool[1] = tid
+		GameWorld.talent_pool[2] = tid
+	else:
+		GameWorld.talent_pool[slot_index] = tid
+	_populate_talents()
+	_show_toast("随机选择：" + TalentPool.get_metadata(tid).get("name", tid))
 
 func _populate_talents():
 	for child in talent_container.get_children():

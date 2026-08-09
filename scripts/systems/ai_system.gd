@@ -122,7 +122,17 @@ static func update_ai(ai_think_delay: int) -> int:
 			_state = "DEFEND"
 			return new_delay
 
-		# ── 地狱角色专属战术 ──
+		# ── 地狱角色专属战术：通过 CharacterFactory 调度到角色脚本（配置驱动，禁止 match char_id 新增分支）──
+		var handled_state = CharacterFactory.call_ai_hell_tactics(f, {
+			"target": target, "dist": dist, "dir": dir_to_target, "rand": rand,
+			"diff": diff, "player": player,
+			"skill1": skill1, "skill2": skill2, "ult": ult,
+			"can_use_s1": can_use_s1, "can_use_s2": can_use_s2, "can_use_ult": can_use_ult,
+		})
+		if handled_state != "":
+			_state = handled_state
+			return new_delay
+
 		match f.char_id:
 			"assassin":
 				# 刺客：玩家攻击时尝试一技能完美闪避, 60%概率
@@ -464,7 +474,7 @@ static func _update_state(p: Fighter, mx: int):
 
 ## 判断是否为近战角色
 static func _is_melee(f) -> bool:
-	var melee_chars = ["knight", "assassin", "rose", "paladin", "dragonknight", "shadowwarrior"]
+	var melee_chars = ["knight", "assassin", "rose", "paladin", "dragon_knight", "shadowwarrior", "necro_knight"]
 	return f.char_id in melee_chars
 
 ## 获取角色走位参数
@@ -472,6 +482,10 @@ static func _is_melee(f) -> bool:
 static func _get_desire_range(f, dist) -> Dictionary:
 	# ── 地狱特殊走位 ──
 	if GameWorld.difficulty == "hell":
+		# 角色专属走位（通过 CharacterFactory 调度，配置驱动）
+		var custom_desire = CharacterFactory.call_ai_hell_desire(f)
+		if not custom_desire.is_empty():
+			return custom_desire
 		match f.char_id:
 			"evoker":
 				# HP < 60% → 跟随模式（缩小距离）
@@ -498,8 +512,10 @@ static func _get_desire_range(f, dist) -> Dictionary:
 			return {"min": 0, "max": 80}
 		"paladin":
 			return {"min": 0, "max": 80}
-		"dragonknight":
+		"dragon_knight":
 			return {"min": 0, "max": 140}
+		"necro_knight":
+			return {"min": 0, "max": 80}
 		"shadowwarrior":
 			return {"min": 0, "max": 80}
 		"archer":

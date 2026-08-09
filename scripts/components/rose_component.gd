@@ -24,7 +24,7 @@ func update():
 		if blood_heal_timer >= 120:
 			blood_heal_timer = 0
 			blood_abyss -= 1
-			owner.hp = minf(owner.max_hp, owner.hp + 1)
+			Fighter.try_heal(owner, 1)
 	# 全局效果写入黑板，使用信号驱动
 	owner.set_state_flag("time_stop", time_stop)
 

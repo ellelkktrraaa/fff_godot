@@ -15,13 +15,15 @@ static func _register_all():
 	_metadata["thorns"]        = { "name": "荆棘护体",  "desc": "被动 · 可重复选取\n每次选取：反弹 3.0 伤害\n选取 2 次：4.5\n选取 3 次：6.0", "is_skill": false }
 	_metadata["vampiric"]      = { "name": "鲜血汲取",  "desc": "被动 · 可重复选取\n每次选取：治疗 10%\n选取 2 次：15%\n选取 3 次：20%", "is_skill": false }
 	_metadata["blaze_rush"]    = { "name": "烈焰冲刺",  "desc": "主动 · 不可叠加\n向前冲刺并留下火海\n冲刺伤害：6  火海：4/次\n冷却：600 帧（10 秒）", "is_skill": true }
-	_metadata["void_affinity"] = { "name": "虚空亲和",  "desc": "被动 · 不可叠加\n触碰虚空时扣除当前生命 50%\n随机传送至地面", "is_skill": false }
+	_metadata["void_affinity"] = { "name": "虚空亲和",  "desc": "被动 · 不可叠加\n落入虚空时不受到伤害\n随机传送至地面", "is_skill": false }
 	_metadata["arcane_surge"]  = { "name": "奥术涌流",  "desc": "主动 · 不可叠加\n被动：能量回复速度 +5%\n释放：瞬间回复 40 能量\n冷却：30 秒", "is_skill": true }
 	_metadata["phase_blink"]   = { "name": "相位闪烁",  "desc": "主动 · 不可叠加\n向操控方向瞬移 500 像素\n无操控方向时默认向前瞬移\n冷却：10 秒", "is_skill": true }
 	_metadata["regen_rune"]    = { "name": "再生符文",  "desc": "主动 · 不可叠加\n被动：所有血量回复量 +10%\n释放：以 5/秒 回复生命\n持续 4 秒  冷却：30 秒", "is_skill": true }
-	_metadata["battle_frenzy"] = { "name": "战斗，爽！", "desc": "被动 · 不可叠加 · 占2格\n伤害 +5%  受伤 -10%\n技能1/2 冷却 -1 秒\n20% 概率免疫击退", "is_skill": false }
-	_metadata["last_stand"]    = { "name": "背水一战",  "desc": "被动 · 不可叠加 · 整局1次\nHP < 20% 时自动触发\n无敌 10 秒 · 免疫击退\n免疫所有负面效果", "is_skill": false }
+	_metadata["battle_frenzy"] = { "name": "战斗，爽！", "desc": "被动 · 不可叠加 · 占2格\n伤害 +5%  防御力 +5.6\n技能1/2 冷却 -1 秒\n20% 概率免疫击退", "is_skill": false }
+	_metadata["last_stand"]    = { "name": "背水一战",  "desc": "被动 · 不可叠加 · 整局1次\nHP < 20% 时自动触发\n无敌 10 秒 · 免疫击退\n免疫所有负面效果\n\n【狂战士专属】携带时变为「破釜沉舟」：\n开局损失 60 血（触发浴血）\n每 5 秒获得 1 秒无敌\n首次血量低于 20 时强制锁定为 20，持续 10 秒\n狂暴状态下免除每秒真实伤害", "is_skill": false }
 	_metadata["order_reforge"] = { "name": "秩序重铸",  "desc": "主动 · 不可叠加\n被动：技能一/二 冷却 -1 秒\n释放：所有冷却中的技能\n立即结束冷却\n冷却：40 秒", "is_skill": true }
+	_metadata["immovable"]     = { "name": "不动如山",  "desc": "主动 · 不可叠加\n释放：获得 8 秒霸体\n被动：每 5~8 秒获得 1 秒霸体\n冷却：35 秒", "is_skill": true }
+	_metadata["rock_solid"]    = { "name": "坚若磐石",  "desc": "被动 · 不可叠加\n每 8~15 秒获得 3 秒防御力 +50\n血量降至 50% / 30% / 10% 时必定触发\n血量低于 20% 时永久获得防御力 +5.6", "is_skill": false }
 
 	_registry["vitality"]      = { "factory": _make_vitality }
 	_registry["thorns"]        = { "factory": _make_thorns }
@@ -34,6 +36,8 @@ static func _register_all():
 	_registry["battle_frenzy"] = { "factory": _make_battle_frenzy }
 	_registry["last_stand"]    = { "factory": _make_last_stand }
 	_registry["order_reforge"] = { "factory": _make_order_reforge }
+	_registry["immovable"]     = { "factory": _make_immovable }
+	_registry["rock_solid"]    = { "factory": _make_rock_solid }
 
 static func create(talent_id: String, fighter) -> TalentInstance:
 	var entry = _registry.get(talent_id)
@@ -112,7 +116,7 @@ static func _make_vampiric(f) -> TalentInstance:
 		var stack = f.ad.get("vampiric_stack", 1)
 		var pct = 0.1 + 0.1 * (stack - 1)  # 1层:10%, 2层:20%, 3层:30%
 		if dmg > 0:
-			f.hp = minf(f.max_hp, f.hp + dmg * pct)
+			Fighter.try_heal(f, dmg * pct)
 	return inst
 
 ## 烈焰冲刺 — 主动天赋（按 K/L/; 键激活）
@@ -190,7 +194,7 @@ static func _make_blaze_rush(f) -> TalentInstance:
 
 	return inst
 
-## 虚空亲和 — 被动（不可叠加）触碰虚空时扣50%HP并传送
+## 虚空亲和 — 被动（不可叠加）落入虚空不受伤，随机传送回地面
 static func _make_void_affinity(f) -> TalentInstance:
 	var inst = TalentInstance.new()
 	inst.talent_name = "虚空亲和"
@@ -198,8 +202,7 @@ static func _make_void_affinity(f) -> TalentInstance:
 	inst.is_skill = false
 	inst.on_in_void = func(data: Dictionary):
 		var fighter = data["fighter"]
-		var pre_hp = data["pre_hp"]
-		fighter.hp = maxf(1.0, pre_hp * 0.5)
+		fighter.state_flags["void_damage_immune"] = true  # 拦截本次虚空伤害
 		fighter._teleport_to_random_ground()
 	return inst
 
@@ -338,23 +341,23 @@ static func _make_regen_rune(f) -> TalentInstance:
 			if state["timer"] <= 0:
 				state["active"] = false
 			else:
-				f.hp = minf(f.max_hp, f.hp + HEAL_PER_SEC / 60.0)
+				Fighter.try_heal(f, HEAL_PER_SEC / 60.0)
 
 		# 被动：所有治疗量 +10%（通过监测 hp 增量实现）
 		if f.hp > state["prev_hp"] and not state["boosting"]:
 			var delta = f.hp - state["prev_hp"]
 			state["boosting"] = true
-			f.hp = minf(f.max_hp, f.hp + delta * HEAL_BOOST)
+			Fighter.try_heal(f, delta * HEAL_BOOST)
 			state["boosting"] = false
 
 		state["prev_hp"] = f.hp
 
 	return inst
 
-## 战斗，爽！— 被动天赋 · 占2格（伤害+5%，受伤-10%，技能12冷却-1s，20%免疫击退）
+## 战斗，爽！— 被动天赋 · 占2格（伤害+5%，防御+5.56，技能12冷却-1s，20%免疫击退）
 static func _make_battle_frenzy(f) -> TalentInstance:
 	const ATK_BOOST := 0.05       # 伤害 +5%
-	const DMG_REDUCTION := 0.1    # 受伤 -10%
+	const DEFENSE_BOOST := 5.56   # 防御 +5.56（护甲公式等效减伤 10%）
 	const CD_REDUCTION := 60      # 技能冷却 -1 秒（60 帧）
 	const KNOCKBACK_RESIST := 0.2 # 击退免疫概率 20%
 
@@ -370,8 +373,8 @@ static func _make_battle_frenzy(f) -> TalentInstance:
 		f.ad["battle_frenzy_applied"] = true
 		# 伤害 +5%
 		f.attack_boost += ATK_BOOST
-		# 受伤 -10%
-		f.damage_reduction += DMG_REDUCTION
+		# 防御 +5.56
+		f.defense += DEFENSE_BOOST
 		# 技能1/2 冷却 -1s
 		var s1 = f.get_skill("skill1")
 		if s1: s1.cooldown = maxi(1, s1.cooldown - CD_REDUCTION)
@@ -388,8 +391,12 @@ static func _make_battle_frenzy(f) -> TalentInstance:
 
 ## 背水一战 — 被动天赋 · 整局1次（HP<20%触发无敌10s，免疫击退+负面效果）
 static func _make_last_stand(f) -> TalentInstance:
+	# 狂战士专属：背水一战 → 破釜沉舟
+	if f.char_id == "berserker":
+		return _make_broken_boat(f)
 	const HP_THRESHOLD := 0.2     # 触发阈值：20% 最大生命
 	const INVULN_DURATION := 600  # 无敌持续帧数（10 秒）
+	const INVULN_DEFENSE := 100000.0  # 超大防御力（护甲公式等效减伤 99.95% → 近似无敌）
 
 	var inst = TalentInstance.new()
 	inst.talent_name = "背水一战"
@@ -412,10 +419,10 @@ static func _make_last_stand(f) -> TalentInstance:
 				state["active"] = true
 				state["timer"] = INVULN_DURATION
 
-				# 无敌：伤害减免拉满 → 每击只受 1 点伤害
-				f.damage_reduction += 1.0
+				# 无敌：超大防御力 → 每击只受 1 点伤害（再由 on_damage_received 补回）
+				f.defense += INVULN_DEFENSE
 
-				# 防止触发的那一击直接致死
+				# 防止触发的那一击直接致死（背水一战为无敌机制，可绕过禁疗）
 				f.hp = maxf(new_hp, f.max_hp * HP_THRESHOLD)
 
 				# 清除已有负面效果
@@ -425,13 +432,11 @@ static func _make_last_stand(f) -> TalentInstance:
 				Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 40, Color(1.0, 0.843, 0.0), 8, 12, "star", 1.5)
 		)
 
-	# ── 受击时：补回那 1 点强制伤害 → 真正无敌 + 免疫击退 ──
+	# ── 受击时：免疫击退（无敌由超大防御力实现，护甲已可完全减免伤害）──
 	inst.on_damage_received = func(_data: Dictionary):
 		var state = f.ad["last_stand"]
 		if not state["active"]:
 			return
-		# 补回每击强制扣的 1 点伤害
-		f.hp = minf(f.max_hp, f.hp + 1)
 		# 免疫击退
 		f.vx = 0.0
 		f.vy = maxf(0.0, f.vy)
@@ -446,7 +451,72 @@ static func _make_last_stand(f) -> TalentInstance:
 		_clear_debuffs(f)
 		if state["timer"] <= 0:
 			state["active"] = false
-			f.damage_reduction -= 1.0  # 恢复正常受伤
+			f.defense = maxf(0.0, f.defense - INVULN_DEFENSE)  # 恢复正常受伤
+
+	return inst
+
+## 破釜沉舟 — 狂战士专属（狂战士携带背水一战时替换）：
+## 开局损失 60 血（可触发浴血）、每 5s 获得 1s 无敌、
+## 首次血量低于 20 强制锁定为 20 持续 10s、狂暴状态免除每秒真伤
+static func _make_broken_boat(f) -> TalentInstance:
+	const START_HP_COST := 60.0      # 开局损失血量
+	const INVULN_INTERVAL := 300     # 无敌间隔：5 秒（60fps）
+	const INVULN_DURATION := 60      # 无敌持续：1 秒
+	const LOCK_HP := 20.0            # 锁血数值/阈值
+	const LOCK_DURATION := 600       # 锁血持续：10 秒
+	const LOCK_DEFENSE := 100000.0   # 锁血期间近似无敌（护甲公式等效减伤 99.95%）
+
+	var inst = TalentInstance.new()
+	inst.talent_name = "破釜沉舟"
+	inst.description = "被动 · 不可叠加 · 狂战士专属"
+	inst.is_skill = false
+
+	# ── 状态命名空间 ──
+	f.ad["broken_boat"] = {"invuln_cd": 0, "locked": false, "lock_timer": 0}
+
+	# ── 开局：损失 60 血（直接扣血 → 浴血按损失血量自动加成）──
+	inst.on_attach = func():
+		f.hp = maxf(0.0, f.hp - START_HP_COST)
+		# 立即进入第一个无敌周期，此后每 5s 循环
+		Fighter.set_invincible(f, INVULN_DURATION)
+		f.ad["broken_boat"]["invuln_cd"] = INVULN_INTERVAL - INVULN_DURATION
+
+		# 首次血量低于 20 → 强制锁定为 20，持续 10s
+		f.hp_changed.connect(func(_old: float, new_hp: float):
+			var state = f.ad["broken_boat"]
+			if state["locked"] or new_hp <= 0:
+				return
+			if new_hp < LOCK_HP:
+				state["locked"] = true
+				state["lock_timer"] = LOCK_DURATION
+				f.hp = LOCK_HP                    # 强制锁定为 20
+				f.defense += LOCK_DEFENSE         # 锁血期间不掉血
+				_clear_debuffs(f)
+				Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 40, Color(1.0, 0.843, 0.0), 8, 12, "star", 1.5)
+		)
+
+	# ── 锁血期间免疫击退 ──
+	inst.on_damage_received = func(_data: Dictionary):
+		var state = f.ad["broken_boat"]
+		if not state["locked"]:
+			return
+		f.vx = 0.0
+		f.vy = maxf(0.0, f.vy)
+
+	# ── 每帧：无敌周期循环 + 锁血计时 ──
+	inst.update = func():
+		var state = f.ad["broken_boat"]
+		# 每 5s 获得 1s 无敌
+		state["invuln_cd"] -= 1
+		if state["invuln_cd"] <= 0:
+			Fighter.set_invincible(f, INVULN_DURATION)
+			state["invuln_cd"] = INVULN_INTERVAL
+		# 锁血计时：10s 后可正常掉血
+		if state["locked"]:
+			state["lock_timer"] -= 1
+			if state["lock_timer"] <= 0:
+				state["locked"] = false
+				f.defense = maxf(0.0, f.defense - LOCK_DEFENSE)
 
 	return inst
 
@@ -505,5 +575,128 @@ static func _make_order_reforge(f) -> TalentInstance:
 		var state = f.ad["order_reforge"]
 		if state["cd"] > 0:
 			state["cd"] -= 1
+
+	return inst
+
+## 不动如山 — 主动天赋（释放获得 8s 霸体；携带时每 5~8s 随机获得 1s 霸体；冷却 35s）
+static func _make_immovable(f) -> TalentInstance:
+	const CD := 2100               # 冷却帧数（35 秒）
+	const ACTIVE_DURATION := 480   # 主动霸体持续 8 秒
+	const PASSIVE_MIN := 300       # 被动霸体间隔下限 5 秒
+	const PASSIVE_MAX := 480       # 被动霸体间隔上限 8 秒
+	const PASSIVE_DURATION := 60   # 被动霸体持续 1 秒
+
+	var inst = TalentInstance.new()
+	inst.talent_name = "不动如山"
+	inst.description = "主动 · 不可叠加"
+	inst.is_skill = true
+
+	# ── 状态命名空间 ──
+	f.ad["immovable"] = {
+		"cd": 0,
+		"passive_timer": PASSIVE_MIN + randi() % (PASSIVE_MAX - PASSIVE_MIN),
+	}
+
+	inst.can_activate = func():
+		return f.ad["immovable"]["cd"] <= 0
+
+	inst.activate = func():
+		var state = f.ad["immovable"]
+		if state["cd"] > 0:
+			return {"success": false}
+		state["cd"] = CD
+		# 8s 霸体
+		Fighter.set_super_armor(f, ACTIVE_DURATION)
+		Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 25, Color(0.85, 0.75, 0.5), 6, 9, "star", 1.2)
+		return {"success": true}
+
+	inst.update = func():
+		var state = f.ad["immovable"]
+		if state["cd"] > 0:
+			state["cd"] -= 1
+		# 被动：每 5~8s 随机获得一次 1s 霸体（主动霸体期间不叠加覆盖）
+		state["passive_timer"] -= 1
+		if state["passive_timer"] <= 0:
+			state["passive_timer"] = PASSIVE_MIN + randi() % (PASSIVE_MAX - PASSIVE_MIN)
+			if f.state_flags.get("super_armor_timer", 0) <= 0:
+				Fighter.set_super_armor(f, PASSIVE_DURATION)
+
+	return inst
+
+## 坚若磐石 — 被动天赋（每 8~15s 获得 3s 减伤 50%；血量降至 50%/30%/10% 时必定触发；低于 20% 永久减伤 10%）
+static func _make_rock_solid(f) -> TalentInstance:
+	const DEFENSE_BONUS := 50.0   # 防御 +50（护甲公式等效减伤 50%）
+	const ACTIVE_DURATION := 180  # 减伤持续 3 秒
+	const PASSIVE_MIN := 480      # 触发间隔下限 8 秒
+	const PASSIVE_MAX := 900      # 触发间隔上限 15 秒
+	const LOW_HP_THRESHOLD := 0.2   # 血量低于总血量 20%
+	const LOW_HP_DEFENSE := 5.56    # 防御 +5.56（护甲公式等效减伤 10%），持续到游戏结束
+
+	var inst = TalentInstance.new()
+	inst.talent_name = "坚若磐石"
+	inst.description = "被动 · 不可叠加"
+	inst.is_skill = false
+
+	# ── 状态命名空间 ──
+	f.ad["rock_solid"] = {
+		"timer": PASSIVE_MIN + randi() % (PASSIVE_MAX - PASSIVE_MIN),
+		"active": false,
+		"active_remaining": 0,
+		"defense_added": false,
+		"used_thresholds": {"0.5": false, "0.3": false, "0.1": false},
+		"under_20_applied": false,
+	}
+
+	# 触发减伤：开启/延续 3s 减伤（防御只加一次，重复触发仅刷新时长）
+	var apply_dur = func():
+		var state = f.ad["rock_solid"]
+		state["active"] = true
+		state["active_remaining"] = ACTIVE_DURATION
+		if not state["defense_added"]:
+			f.defense += DEFENSE_BONUS
+			state["defense_added"] = true
+
+	# ── 血量阈值：降至 50%/30%/10% 时必定触发（每个阈值一次）；低于 20% 永久减伤 ──
+	inst.on_attach = func():
+		f.hp_changed.connect(func(_old: float, new_hp: float):
+			if new_hp <= 0:
+				return
+			var state = f.ad["rock_solid"]
+			for key in ["0.5", "0.3", "0.1"]:
+				if new_hp <= f.max_hp * float(key) and not state["used_thresholds"][key]:
+					state["used_thresholds"][key] = true
+					apply_dur.call()
+			if not state["under_20_applied"] and new_hp < f.max_hp * LOW_HP_THRESHOLD:
+				state["under_20_applied"] = true
+				f.defense += LOW_HP_DEFENSE  # 永久减伤 10%，持续到游戏结束
+		)
+		# 开局已低于阈值时立即结算（如破釜沉舟开局扣血）
+		if f.hp <= 0:
+			return
+		var st = f.ad["rock_solid"]
+		for key in ["0.5", "0.3", "0.1"]:
+			if f.hp <= f.max_hp * float(key) and not st["used_thresholds"][key]:
+				st["used_thresholds"][key] = true
+				apply_dur.call()
+		if not st["under_20_applied"] and f.hp < f.max_hp * LOW_HP_THRESHOLD:
+			st["under_20_applied"] = true
+			f.defense += LOW_HP_DEFENSE  # 永久减伤 10%，持续到游戏结束
+
+	# ── 每帧：定时触发 + 减伤计时 ──
+	inst.update = func():
+		var state = f.ad["rock_solid"]
+		# 定时：每 8~15s 随机触发一次
+		state["timer"] -= 1
+		if state["timer"] <= 0:
+			state["timer"] = PASSIVE_MIN + randi() % (PASSIVE_MAX - PASSIVE_MIN)
+			apply_dur.call()
+		# 减伤计时：3s 后还原防御
+		if state["active"]:
+			state["active_remaining"] -= 1
+			if state["active_remaining"] <= 0:
+				state["active"] = false
+				if state["defense_added"]:
+					f.defense = maxf(0.0, f.defense - DEFENSE_BONUS)
+					state["defense_added"] = false
 
 	return inst

@@ -37,6 +37,14 @@ static var STATUS_DEFS := {
 		"id": "astrologer_ult", "duration": 1080, "vfx_color": Color(0.8, 0.7, 1.0),  # 18秒@60fps
 		"slow_factor": 0.5,
 	},
+	"tendon_cut": {
+		"id": "tendon_cut", "duration": 300, "vfx_color": Color(0.75, 0.9, 0.3),
+		"slow_factor": 0.9,  # 移速 -10%
+	},
+	"warcry_lock": {
+		"id": "warcry_lock", "duration": 60, "vfx_color": Color(0.9, 0.7, 0.3),
+		"freeze": true,  # 战吼震慑：移动失灵 1s
+	},
 }
 
 func _init(p_id: String, p_duration: int = 0):
@@ -70,7 +78,9 @@ func apply(target):
 			target.jump_reduction = 0.6  # 减少40%跳跃高度
 		"astrologer_ult":
 			target.jump_reduction = 0.5
-			target.damage_reduction += 0.2
+			target.defense += 12.5  # 防御 +12.5（护甲公式等效减伤 20%）
+		"tendon_cut":
+			target.jump_reduction = minf(target.jump_reduction, 0.4)  # 跳跃高度减少 60%
 
 # Called each tick when tick_damage > 0 and tick_interval matched
 func _handle_tick(target: Fighter):
@@ -92,7 +102,9 @@ func _handle_expire(target):
 			target.jump_reduction = 1.0
 		"astrologer_ult":
 			target.jump_reduction = 1.0
-			target.damage_reduction = maxf(0.0, target.damage_reduction - 0.2)
+			target.defense = maxf(0.0, target.defense - 12.5)
+		"tendon_cut":
+			target.jump_reduction = 1.0
 
 func update(target: Fighter) -> bool:
 	timer -= 1

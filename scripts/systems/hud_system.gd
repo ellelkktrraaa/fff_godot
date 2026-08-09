@@ -153,28 +153,35 @@ static func _draw_difficulty_badge(game_node: CanvasItem, font: Font):
 
 static func _draw_skill_cooldowns(game_node: CanvasItem, font: Font):
 	var p = GameWorld.player
-	var default_labels = {"attack": "J 普攻", "skill1": "U 技1", "skill2": "I 技2", "ult": "O 大招"}
+	var default_labels = {"attack": "J 普攻", "skill1": "U 技1", "skill2": "I 技2", "ult": "O 大招", "sub": "7 战吼"}
 	var skill_labels = p.hud_skill_labels if not p.hud_skill_labels.is_empty() else default_labels
-	var btn_x_start = (Constants.W - 4 * 60) / 2.0
-	var skill_keys = ["attack", "skill1", "skill2", "ult"]
+	var btn_x_start = (Constants.W - 5 * 60) / 2.0
+	var skill_keys = ["attack", "skill1", "skill2", "ult", "sub"]
 	for i in skill_keys.size():
 		var key = skill_keys[i]
 		var sk = p.get_skill(key)
 		var bx = btn_x_start + i * 64
 		var by = Constants.H - 28
-		game_node.draw_rect(Rect2(bx, by, 58, 22), Color(0.1, 0.1, 0.15, 0.85))
-		game_node.draw_string(font, Vector2(bx + 4, by + 4), skill_labels.get(key, key), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.667, 0.667, 0.8))
-		if sk and sk.cd > 0:
-			var cd_pct = float(sk.cd) / float(sk.cooldown)
-			game_node.draw_rect(Rect2(bx, by, 58 * cd_pct, 22), Color(0, 0, 0, 0.6))
-			game_node.draw_string(font, Vector2(bx + 29, by + 14), str(ceil(sk.cd / 60.0)) + "s", HORIZONTAL_ALIGNMENT_CENTER, -1, 8, Color(1.0, 0.533, 0.533))
-		game_node.draw_rect(Rect2(bx, by, 58, 22), Color(0.3, 0.3, 0.5), false)
+		var awaiting = sk != null and sk.in_next_stage_window()  # 多段技能：等待释放下一段 → 黄标
+		if awaiting:
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(1.0, 0.84, 0.1, 0.9))
+			game_node.draw_string(font, Vector2(bx + 4, by + 4), skill_labels.get(key, key), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.1, 0.1))
+			game_node.draw_string(font, Vector2(bx + 4, by + 14), "下一段 " + str(ceil(sk.stage_window / 60.0)) + "s", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.15, 0.1, 0.0))
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(1.0, 0.7, 0.0), false, 2)
+		else:
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(0.1, 0.1, 0.15, 0.85))
+			game_node.draw_string(font, Vector2(bx + 4, by + 4), skill_labels.get(key, key), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.667, 0.667, 0.8))
+			if sk and sk.cd > 0:
+				var cd_pct = float(sk.cd) / float(sk.cooldown)
+				game_node.draw_rect(Rect2(bx, by, 58 * cd_pct, 22), Color(0, 0, 0, 0.6))
+				game_node.draw_string(font, Vector2(bx + 29, by + 14), str(ceil(sk.cd / 60.0)) + "s", HORIZONTAL_ALIGNMENT_CENTER, -1, 8, Color(1.0, 0.533, 0.533))
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(0.3, 0.3, 0.5), false)
 
 static func _draw_talent_buttons(game_node: CanvasItem, font: Font):
 	var p = GameWorld.player
 	if not is_instance_valid(p) or not p.talent_manager or p.talent_slots.is_empty():
 		return
-	var btn_x_start = (Constants.W - 4 * 60) / 2.0 + 4 * 64
+	var btn_x_start = (Constants.W - 5 * 60) / 2.0 + 5 * 64
 	var by = Constants.H - 28
 	var _talent_key_labels = ["K", "L", ";"]
 	for i in range(p.talent_slots.size()):

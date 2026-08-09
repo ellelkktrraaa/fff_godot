@@ -220,10 +220,8 @@ static func _update_shadow_trap(f: Fighter, comp: ShadowwarriorComponent):
 		"capture":
 			var cap = trap["captured"]
 			if cap and cap.hp > 0:
-				# 固定被抓取的敌人
-				cap.pos_x = trap["x"] - cap.w / 2.0 + trap["w"] / 2.0
-				cap.vx = 0
-				cap.vy = 0
+				# 固定被抓取的敌人（通用锁定接口）
+				Fighter.hold_fighter_in_place(cap, trap["x"] + trap["w"] / 2.0)
 			if trap["timer"] <= 0:
 				trap["phase"] = "burst"
 				trap["timer"] = 20  # 爆炸动画 0.33 秒
@@ -342,10 +340,8 @@ static func _update_iaido(f: Fighter, comp: ShadowwarriorComponent):
 			if slash_rect.intersects(target.get_hit_box()):
 				Fighter.apply_damage(target, 10.0, f)
 				slash["hit_dealt"] = true
-				# 抓取效果：固定对手在刀光中心
-				target.pos_x = slash["x"] + slash["w"] / 2.0 - target.w / 2.0
-				target.vx = 0
-				target.vy = 0
+				# 抓取效果：固定对手在刀光中心（通用锁定接口）
+				Fighter.hold_fighter_in_place(target, slash["x"] + slash["w"] / 2.0)
 				slash["captured"] = target
 
 	# 到期爆炸：iaido_timer 归零时造成 30 点伤害

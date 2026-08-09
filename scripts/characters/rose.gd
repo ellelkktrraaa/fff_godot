@@ -115,7 +115,6 @@ static func update_systems(f: Fighter):
 			Fighter.emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 12, Color(0.9, 0.15, 0.15), 5, 7, "star", 0.8)
 	# Skill2: bat swarm
 	if comp.rose_skill2_active:
-		f.is_invincible = true
 		f.image_state = "skill2"
 		if comp.rose_skill2_enhanced:
 			f.vx = 0; f.vy = 0
@@ -136,7 +135,7 @@ static func update_systems(f: Fighter):
 			if comp.rose_skill2_fly_timer <= 0:
 				comp.rose_skill2_active = false
 				comp.rose_skill2_enhanced = false
-				f.is_invincible = false
+				Fighter.clear_invincible(f)
 				f.image_state = ""
 				GameWorld.rose_joystick_dir = Vector2.ZERO
 		else:
@@ -152,7 +151,7 @@ static func update_systems(f: Fighter):
 						enemy.vy = 0
 			if not f.dashing:
 				comp.rose_skill2_active = false
-				f.is_invincible = false
+				Fighter.clear_invincible(f)
 				f.image_state = ""
 	# Skill1: dash 阶段向前抓取（一次判定）
 	elif f.dashing and f.image_state == "skill1" and not comp.rose_skill1_grab_done:
@@ -179,9 +178,7 @@ static func update_systems(f: Fighter):
 		if enemy and enemy.hp > 0:
 			if comp.rose_skill1_holding:
 				# 持续锁定敌方位置（可放防御技能）
-				enemy.pos_x = clampf(comp.rose_skill1_grab_pos_x - enemy.w / 2.0, 10, 2390 - enemy.w)
-				enemy.vx = 0
-				enemy.vy = 0
+				Fighter.hold_fighter_in_place(enemy, comp.rose_skill1_grab_pos_x)
 			else:
 				# 向后判定：刀光区域抓取
 				var slash_w = 220.0
@@ -223,9 +220,7 @@ static func update_systems(f: Fighter):
 	if comp.rose_skill1_holding and comp.rose_skill1_enhanced_slashes.size() == 0 and not _has_active_enhanced_trails(f) and f.dashing:
 		var enemy = GameWorld.get_opponent(f)
 		if enemy and enemy.hp > 0:
-			enemy.pos_x = clampf(comp.rose_skill1_grab_pos_x - enemy.w / 2.0, 10, 2390 - enemy.w)
-			enemy.vx = 0
-			enemy.vy = 0
+			Fighter.hold_fighter_in_place(enemy, comp.rose_skill1_grab_pos_x)
 	# 释放抓取：常态冲刺结束后释放 | 强化刀光全部结束后释放
 	if comp.rose_skill1_holding and comp.rose_skill1_enhanced_slashes.size() == 0 and not _has_active_enhanced_trails(f) and not f.dashing:
 		comp.rose_skill1_holding = false
@@ -384,7 +379,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		comp.rose_skill2_fly_timer = 180  # 3 seconds
 		comp.rose_skill2_damage_tick = 0
 		comp.rose_skill2_tick_damage = 20.0 / 15.0
-		owner.is_invincible = true
+		Fighter.set_invincible(owner)  # 持续无敌直到技能结束
 		owner.set_animation_state("skill2_enhanced")
 	else:
 		# Normal: dash forward (1.2s, 20 energy, 12s cd)
@@ -398,7 +393,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		owner.dash_dir = dir
 		owner.dash_speed = 2.5
 		owner.dash_damage_dealt = true
-		owner.is_invincible = true
+		Fighter.set_invincible(owner)  # 持续无敌直到技能结束
 		if comp:
 			comp.rose_skill2_active = true
 			comp.rose_skill2_enhanced = false
@@ -430,7 +425,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 		"owner": owner,
 		"overlay_id": "rose_ult",
 		"on_finish": func():
-			owner.is_invincible = false
+			Fighter.clear_invincible(owner)
 			if comp:
 				comp.time_stop = false
 				comp.time_stop_timer = 0
@@ -440,7 +435,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	
 	owner.state = "ult"
 	owner.image_state = "ult"
-	owner.is_invincible = true
+	Fighter.set_invincible(owner)  # 大招期间持续无敌
 	if comp:
 		comp.time_stop = true
 		comp.time_stop_timer = int(anim.total_duration * 60)

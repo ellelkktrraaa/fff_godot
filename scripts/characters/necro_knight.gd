@@ -706,3 +706,72 @@ static func _inject_draw():
 	GameWorld.register_draw_effect("necro_horses", func(font, cam_x, _cam_y = 0.0):
 		return _draw_horses(font, cam_x, _cam_y)
 	, 1)
+
+# ===== 地狱模式 AI（由 AISystem 通过 CharacterFactory 调度，配置驱动） =====
+
+## 地狱模式 AI 战术钩子
+## ctx 字段: target / dist / dir / rand / diff / player / skill1 / skill2 / ult / can_use_s1 / can_use_s2 / can_use_ult
+## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），返回 "" 表示未处理走默认 AI
+static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var player = ctx.get("player")
+	var dist = ctx.get("dist", 99999.0)
+	var dir = ctx.get("dir", 1)
+	var rand = ctx.get("rand", 0.0)
+	var skill1: Skill = ctx.get("skill1")
+	var skill2: Skill = ctx.get("skill2")
+	var ult: Skill = ctx.get("ult")
+	var can_use_s1 = ctx.get("can_use_s1", false)
+	var can_use_s2 = ctx.get("can_use_s2", false)
+	var can_use_ult = ctx.get("can_use_ult", false)
+	var mounted = _is_mounted(f)
+
+	# ① 玩家残血 → 大招亡者行军斩杀
+	if can_use_ult and player and player.hp > 0 and player.hp < player.max_hp * 0.45 and dist < 300 and rand < 0.5:
+		f.facing = dir
+		ult.try_use(f)
+		return "ATTACK"
+
+	if mounted:
+		# ② 骑乘中：近身跳斩（铁骑·地裂），远处维持追击（由走位钩子控制）
+		if can_use_s1 and dist < 200 and rand < 0.5:
+			f.facing = dir
+			skill1.try_use(f)
+			return "ATTACK"
+		# ③ 贴脸 → 骑乘普攻（攻击范围更大）
+		if dist < 100:
+			f.facing = dir
+			if f.attack_cooldown <= 0 and not f.attacking:
+				f.attacking = true; f.attack_timer = 30; f.attack_delay = 8
+				f.attack_hit_dealt = false; f.attack_cooldown = ATK_COOLDOWN
+				f.attack_range = 60
+				f.attack_damage = ATK_DMG * 1.2
+			return "ATTACK"
+		return ""
+
+	# 分离（未骑乘）：
+	# ④ 远距离 → 上马冲阵（战马冲回→骑乘）
+	if dist > 250 and can_use_s2 and rand < 0.4:
+		f.facing = dir
+		skill2.try_use(f)
+		return "ATTACK"
+	# ⑤ 中距离 → 缚命裁决（吸附身前敌人 + 终结）
+	if can_use_s1 and dist < 320 and dist > 60 and rand < 0.4:
+		f.facing = dir
+		skill1.try_use(f)
+		return "ATTACK"
+	# ⑥ 贴脸 → 普通普攻
+	if dist < 90:
+		f.facing = dir
+		if f.attack_cooldown <= 0 and not f.attacking:
+			f.attacking = true; f.attack_timer = 30; f.attack_delay = 8
+			f.attack_hit_dealt = false; f.attack_cooldown = ATK_COOLDOWN
+			f.attack_range = 44
+		return "ATTACK"
+
+	return ""
+
+## 地狱模式专属走位参数（空字典表示不覆盖）
+static func ai_hell_desire(f: Fighter) -> Dictionary:
+	if _is_mounted(f):
+		return {"min": 0, "max": 60}  # 骑乘冲阵贴脸
+	return {"min": 0, "max": 80}

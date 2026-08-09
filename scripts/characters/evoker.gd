@@ -410,8 +410,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	# Transfer summon's remaining HP to owner
 	var transferred: int = int(summon["hp"])
 	var heal: float = minf(float(transferred), owner.max_hp - owner.hp)
-	owner.hp += heal
-	owner.hp = minf(owner.hp, owner.max_hp)
+	Fighter.try_heal(owner, heal)
 
 	# Mark summon type as dead
 	var comp: EvokerComponent = owner.components.get_component("evoker") if owner.components else null

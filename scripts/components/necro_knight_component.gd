@@ -52,14 +52,14 @@ func mount():
 		return
 	mount_state = MOUNT_MOUNTED
 	mounted_dmg = 0.0
-	owner.state_flags["super_armor"] = true
+	Fighter.set_super_armor(owner)  # 骑乘霸体（持续直到下马）
 
 func dismount(forced: bool = false):
 	if mount_state == MOUNT_SEPARATED:
 		return
 	mount_state = MOUNT_SEPARATED
 	mounted_dmg = 0.0
-	owner.state_flags.erase("super_armor")
+	Fighter.clear_super_armor(owner)
 	if forced:
 		_apply_dismount_penalty()
 

@@ -279,6 +279,9 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 		var img_scale = f.config.get("image_scale", 1.0)
 		if f.attacking and f.config.has("attack_image_scale"):
 			img_scale = f.config.get("attack_image_scale")
+		# draw_texture_override 贴图可叠加独立缩放系数
+		if f.state_flags.has("draw_texture_override"):
+			img_scale *= f.state_flags.get("draw_texture_override_scale", 1.0)
 		var scale = minf(f.w / tw, f.h / th) * img_scale
 		tw *= scale; th *= scale
 		var tx = px + (f.w - tw) / 2.0

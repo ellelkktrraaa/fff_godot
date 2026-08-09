@@ -70,20 +70,17 @@ static func get_config() -> Dictionary:
 	}
 
 static func create_skills() -> Array:
+	# 多段技能：凌空（一段）→ 寂灭（二段），二段窗口 = 凌空飞行时长（10s）
+	var s1 = Skill.make_staged("skill1", "凌空/寂灭", 900, 15, func(owner: Fighter): return true,
+		[Callable(_skill1_phase1), Callable(_skill1_phase2)], 600)
 	return [
-		Skill.new("skill1", "凌空/寂灭", 900, 15, func(owner: Fighter): return true, Callable(_skill1)),
+		s1,
 		Skill.new("skill2", "鳞反", 900, 15, Callable(_can_use_skill2), Callable(_skill2)),
 		Skill.new("ult", "龙魂", 1200, 40, Callable(_can_use_ult), Callable(_ult)),
 	]
 
 # ===== 技能一：凌空（一段）/ 寂灭（二段） =====
-static func _skill1(owner: Fighter) -> Dictionary:
-	if owner.dk_sky_rise_active:
-		return _skill1_phase2(owner)
-	else:
-		return _skill1_phase1(owner)
-
-## 一段：凌空 — 上挑击飞 + 自身跳起 + 进入飞行
+## 一段：凌空 — 上挑击飞 + 自身跳起 + 进入飞行（由 Skill 多段框架调用）
 static func _skill1_phase1(owner: Fighter) -> Dictionary:
 	owner.energy -= 15
 	var dir = owner.facing
@@ -117,8 +114,10 @@ static func _skill1_phase1(owner: Fighter) -> Dictionary:
 	Fighter.emit_particles(cx, cy, 30, Color(1.0, 0.5, 0.1), 6, 10, "star")
 	return {"success": true}
 
-## 二段：寂灭 — 斜向下冲刺重击，10伤害+灼烧
+## 二段：寂灭 — 斜向下冲刺重击，10伤害+灼烧（仅凌空状态下可释放）
 static func _skill1_phase2(owner: Fighter) -> Dictionary:
+	if not owner.dk_sky_rise_active:
+		return {"success": false}
 	owner.dk_sky_rise_active = false
 	owner.dk_crash_timer = 20  # 20帧斜下冲刺
 	owner.dk_burn_applied = false
@@ -289,12 +288,48 @@ static func _input_sky_rise(owner: Fighter, keys: Dictionary) -> int:
 		Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h, 12, Color(1.0, 0.5, 0.1), 4, 6, "circle")
 		keys.attack = false
 
-	# 技能一 → 寂灭（二段）：绕过 try_use 的 cd 检查，直接释放
+	# 技能一 → 寂灭（二段）：由多段框架释放下一段（窗口内不受 cd/能量限制）
 	if keys.skill1:
-		_skill1_phase2(owner)
+		var s1 = owner.get_skill("skill1")
+		if s1:
+			s1.try_use(owner)
 		keys.skill1 = false
 
 	return 0
+
+## 龙魂火球（地面/空中）——供玩家输入与 AI 共用
+static func _ult_fireball(owner: Fighter):
+	if owner.attack_cooldown > 0 or owner.attacking:
+		return
+	owner.attacking = true; owner.attack_timer = 20
+	owner.attack_delay = 999  # 阻止 fighter.gd 标准攻击判定
+	owner.attack_hit_dealt = true
+	owner.attack_cooldown = 60
+	owner.dk_burn_applied = false
+
+	var px = owner.pos_x + (owner.w if owner.facing == 1 else 0)
+	if owner.grounded:
+		# 地面火球从口部偏高位置发射
+		var py = owner.pos_y - 110
+		GameWorld.projectiles.append({
+			"x": px, "y": py-18, "w": 150, "h": 150,
+			"vx": 5.0 * owner.facing, "vy": 0.0,
+			"life": 120, "damage": 7, "owner": owner,
+			"type": "dk_fireball", "color": Color(1.0, 0.3, 0.1),
+			"img": DK_FIREBALL_GROUND, "burn": true,
+			"reflected": false,
+		})
+	else:
+		var py = owner.pos_y - 110  # 空中火球从口部发射
+		GameWorld.projectiles.append({
+			"x": px, "y": py, "w": 150, "h": 150,
+			"vx": 4.0 * owner.facing, "vy": 3.0,  # 斜向下（参考魔女）
+			"life": 120, "damage": 7, "owner": owner,
+			"type": "dk_fireball", "color": Color(1.0, 0.3, 0.1),
+			"img": DK_FIREBALL_AIR, "burn": true,
+			"reflected": false,
+		})
+	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 10, Color(1.0, 0.4, 0.1), 4, 6, "circle")
 
 ## 龙魂大招输入：自由飞行 + 火球普攻 + 二段动画大招
 static func _input_ult(owner: Fighter, keys: Dictionary) -> int:
@@ -324,37 +359,8 @@ static func _input_ult(owner: Fighter, keys: Dictionary) -> int:
 	owner.pos_y = clampf(owner.pos_y, 20, 380 - owner.h)
 
 	# 火球普攻（唯一可用攻击，巨龙贴图保持待机/飞行不变）
-	if keys.attack and owner.attack_cooldown <= 0 and not owner.attacking:
-		owner.attacking = true; owner.attack_timer = 20
-		owner.attack_delay = 999  # 阻止 fighter.gd 标准攻击判定
-		owner.attack_hit_dealt = true
-		owner.attack_cooldown = 60
-		owner.dk_burn_applied = false
-
-		var px = owner.pos_x + (owner.w if owner.facing == 1 else 0)
-		var py = owner.pos_y + 30
-		if owner.grounded:
-			# 地面火球从口部偏高位置发射
-			py = owner.pos_y - 110
-			GameWorld.projectiles.append({
-				"x": px, "y": py-18, "w": 150, "h": 150,
-				"vx": 5.0 * owner.facing, "vy": 0.0,
-				"life": 120, "damage": 7, "owner": owner,
-				"type": "dk_fireball", "color": Color(1.0, 0.3, 0.1),
-				"img": DK_FIREBALL_GROUND, "burn": true,
-				"reflected": false,
-			})
-		else:
-			py = owner.pos_y - 110  # 空中火球从口部发射
-			GameWorld.projectiles.append({
-				"x": px, "y": py, "w": 150, "h": 150,
-				"vx": 4.0 * owner.facing, "vy": 3.0,  # 斜向下（参考魔女）
-				"life": 120, "damage": 7, "owner": owner,
-				"type": "dk_fireball", "color": Color(1.0, 0.3, 0.1),
-				"img": DK_FIREBALL_AIR, "burn": true,
-				"reflected": false,
-			})
-		Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 10, Color(1.0, 0.4, 0.1), 4, 6, "circle")
+	if keys.attack:
+		_ult_fireball(owner)
 		keys.attack = false
 
 	return 0
@@ -456,7 +462,9 @@ static func update_systems(owner: Fighter):
 			owner.dk_crash_timer = 0
 			owner.set_animation_state("idle"); owner.state = "idle"
 			var s = owner.get_skill("skill1")
-			if s: s.cd = s.cooldown
+			if s:
+				s.end_stage_flow()  # 寂灭已释放，多段流程结束
+				s.cd = s.cooldown
 		return
 
 	# 凌空飞行中
@@ -474,7 +482,9 @@ static func update_systems(owner: Fighter):
 			owner.dk_sky_rise_active = false
 			owner.set_animation_state("idle"); owner.state = "idle"
 			var s = owner.get_skill("skill1")
-			if s: s.cd = s.cooldown
+			if s:
+				s.end_stage_flow()  # 极限时间未释放寂灭 → 黄标消失
+				s.cd = s.cooldown
 		# 裂空：向下冲刺（距离驱动，参考圣骑士冲刺）
 		if owner.dk_dive_attack_timer > 0:
 			var step = minf(18.0, owner.dk_dive_attack_timer)
@@ -499,7 +509,9 @@ static func update_systems(owner: Fighter):
 			owner.dk_crack_ends_flight = false
 			owner.set_animation_state("idle"); owner.state = "idle"
 			var s2 = owner.get_skill("skill1")
-			if s2: s2.cd = s2.cooldown
+			if s2:
+				s2.end_stage_flow()  # 裂空结束飞行 → 未释放二段，流程结束
+				s2.cd = s2.cooldown
 		return
 
 	if not owner.attacking:
@@ -558,3 +570,80 @@ static func update_systems(owner: Fighter):
 					burn.timer = 240
 					burn.tick_damage = 1.0
 					burn.tick_interval = 120
+
+# ===== 地狱模式 AI（由 AISystem 通过 CharacterFactory 调度，配置驱动） =====
+
+## 地狱模式 AI 战术钩子
+## ctx 字段: target / dist / dir / rand / diff / player / skill1 / skill2 / ult / can_use_s1 / can_use_s2 / can_use_ult
+## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），返回 "" 表示未处理走默认 AI
+static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var target = ctx.get("target")
+	var dist = ctx.get("dist", 99999.0)
+	var dir = ctx.get("dir", 1)
+	var rand = ctx.get("rand", 0.0)
+	var player = ctx.get("player")
+	var skill1: Skill = ctx.get("skill1")
+	var skill2: Skill = ctx.get("skill2")
+	var ult: Skill = ctx.get("ult")
+	var can_use_s1 = ctx.get("can_use_s1", false)
+	var can_use_s2 = ctx.get("can_use_s2", false)
+	var can_use_ult = ctx.get("can_use_ult", false)
+
+	# 龙魂状态：追击 + 火球压制 + 残血二段斩杀
+	if f.dk_ult_active:
+		if f.dk_ult_phase2_active:
+			return "ATTACK"  # 二段动画中锁定
+		var tx = target.pos_x if target is Fighter else target.get("x", 0.0)
+		f.facing = 1 if tx > f.pos_x else -1
+		# 低空悬停逼近玩家
+		f.vx = f.facing * ctx["diff"]["move_speed"] * 0.7
+		f.vy = -3.0
+		_ult_fireball(f)
+		# 玩家残血或贴脸 → 二段龙魂爆发
+		if player and player.hp > 0 and (player.hp < player.max_hp * 0.4 or absf(player.pos_x - f.pos_x) < 120):
+			_start_ult_phase2(f)
+		return "ATTACK"
+
+	# 鳞反中：原地防御
+	if f.dk_shield_active:
+		return "DEFEND"
+
+	# 凌空飞行中：主动释放寂灭俯冲（与玩家操作一致，绕过 cd 直接触发）
+	if f.dk_sky_rise_active:
+		if f.dk_sky_rise_anim_timer <= 0:
+			_skill1_phase2(f)
+		return "ATTACK"
+
+	# ① 玩家攻击中 + 贴脸 → 鳞反反伤（55%）
+	if can_use_s2 and player and player.hp > 0 and player.attacking and dist < 120 and rand < 0.55:
+		f.facing = dir
+		skill2.try_use(f)
+		return "DEFEND"
+
+	# ② 能量充足 → 龙魂变身压制（中近距离或玩家残血）
+	if can_use_ult and (dist < 250 or (player and player.hp > 0 and player.hp < player.max_hp * 0.4)) and rand < 0.4:
+		f.facing = dir
+		ult.try_use(f)
+		return "ATTACK"
+
+	# ③ 中距离 → 凌空上挑，抢占空中优势（为寂灭俯冲做铺垫）
+	if can_use_s1 and dist < 260 and dist > 40 and rand < 0.4:
+		f.facing = dir
+		skill1.try_use(f)
+		return "ATTACK"
+
+	# ④ 贴脸 → 地面普攻（火焰突刺 + 灼烧）
+	if dist < 80:
+		f.facing = dir
+		if f.attack_cooldown <= 0 and not f.attacking:
+			f.attacking = true; f.attack_timer = 30; f.attack_delay = 8
+			f.attack_hit_dealt = false; f.attack_cooldown = 60
+			f.dk_burn_applied = false
+			f.state = "attack"
+		return "ATTACK"
+
+	return ""
+
+## 地狱模式专属走位参数（空字典表示不覆盖）
+static func ai_hell_desire(f: Fighter) -> Dictionary:
+	return {"min": 0, "max": 140}
