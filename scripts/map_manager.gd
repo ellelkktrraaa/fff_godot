@@ -24,7 +24,7 @@ static func ensure_init():
 static var _builtin_maps: Array[String] = [
 	"res://maps/map_01_battlefield.tscn",
 	"res://maps/map_02_towers.tscn",
-	"res://maps/map_03_voids_brokenbridge.tscn",
+	"res://maps/map_03_broken_bridge.tscn",
 	"res://maps/map_04_voids_skypalace.tscn",
 ]
 
@@ -141,7 +141,7 @@ const BG_DIR := "res://assets/battle_bg/"
 
 # 地图关键词 → 背景文件名（精确配对，优先级最高）
 static var _map_bg_pairs: Dictionary = {
-	"brokenbridge": "bg_void_01.png",
+	"broken_bridge": "bg_void_01.png",
 	"skypalace":   "bg_void_02.png",
 	"battlefield": "bg_fallen_throne.png",
 	"towers":      "bg_divine_ruins.png",

@@ -62,6 +62,12 @@ var attack_speed: float = 2.25
 var attack_boost: float = 0
 var boost_timer: int = 0
 
+# 防御（护甲公式：减伤率 = defense / (defense + 50)，收益递减）
+var defense: float = 0
+
+# 禁疗：为 true 时所有治疗来源（生命球/天赋/技能）无效（狂战士浴血机制）
+var heal_blocked: bool = false
+
 # State
 var grounded: bool = false
 var state: String = "idle"
@@ -106,9 +112,6 @@ var burn_timer: int = 0
 # Invincibility (shared across all characters)
 var is_invincible: bool = false
 var invincible_timer: int = 0
-
-# Damage reduction (domain effect, etc.)
-var damage_reduction: float = 0.0
 
 # Speed multiplier (domain effect, etc.)
 var speed_multiplier: float = 1.0
@@ -227,6 +230,7 @@ func _init_from_config():
 	attack_speed = cfg.get("speed", 2.25)
 	attack_range = cfg.get("attack_range", 44)
 	attack_damage = cfg.get("attack_damage", 5)
+	defense = cfg.get("defense", 0)
 	var fields = cfg.get("fields", {})
 	for key in fields:
 		var val = fields[key]
@@ -250,6 +254,7 @@ func _snapshot_stats():
 	_stat_base["attack_damage"] = attack_damage
 	_stat_base["attack_speed"] = attack_speed
 	_stat_base["attack_range"] = attack_range
+	_stat_base["defense"] = defense
 
 func add_stat_mod(attr: String, source: String, add: float = 0.0, mul: float = 1.0):
 	if not _stat_mods.has(attr):
@@ -259,6 +264,21 @@ func add_stat_mod(attr: String, source: String, add: float = 0.0, mul: float = 1
 	# 修饰最大血量后同步当前血量
 	if attr == "max_hp":
 		hp = minf(hp, max_hp)
+
+## 移除指定来源的属性修饰（供动态加成反复刷新使用）
+func remove_stat_mod(attr: String, source: String):
+	if not _stat_mods.has(attr):
+		return
+	_stat_mods[attr] = _stat_mods[attr].filter(func(m): return m.get("source", "") != source)
+	_recalc_stat(attr)
+
+## 通用治疗入口：统一拦截禁疗目标
+static func try_heal(target: Fighter, amount: float):
+	if not target or target.hp <= 0 or amount <= 0:
+		return
+	if target.heal_blocked:
+		return
+	target.hp = minf(target.max_hp, target.hp + amount)
 
 func _recalc_stat(attr: String):
 	var base = _stat_base.get(attr, _get_attr_val(attr))
@@ -276,6 +296,7 @@ func _get_attr_val(attr: String) -> float:
 		"attack_damage": return attack_damage
 		"attack_speed": return attack_speed
 		"attack_range": return attack_range
+		"defense": return defense
 	return 0.0
 
 func _set_attr_val(attr: String, val: float):
@@ -285,6 +306,7 @@ func _set_attr_val(attr: String, val: float):
 		"attack_damage": attack_damage = val
 		"attack_speed": attack_speed = val
 		"attack_range": attack_range = val
+		"defense": defense = val
 
 func set_animation_state(state_key: String):
 	image_state = state_key
@@ -299,6 +321,9 @@ func get_skill(key: String):
 	return skill_map.get(key)
 
 func add_status(effect_id: String):
+	# 免疫所有负面效果（如狂暴模式）
+	if state_flags.get("immune_negative_status", false):
+		return
 	if _StatusEffectClass == null:
 		_StatusEffectClass = load("res://scripts/status_effect.gd")
 	# 龙骑士免疫灼烧
@@ -332,7 +357,7 @@ func get_slowed_factor() -> float:
 	return 1.0
 
 func is_movement_locked() -> bool:
-	return has_status("frozen") or has_status("stun") or shield_active or dashing
+	return has_status("frozen") or has_status("stun") or shield_active or dashing or state_flags.get("tendon_locked", false)
 
 func get_hit_box() -> Rect2:
 	# 刺客冲刺中扩大受击体积（沿冲刺方向延伸 25 像素），更容易触发闪避
@@ -431,9 +456,12 @@ func apply_physics():
 				pos_y = 380 - h
 				vy = 0
 				grounded = true
-		# 虚空：掉落超过底线 → 受20伤害，传送回出生点
+		# 虚空：掉落超过底线 → 受20伤害，传送回出生点（虚空亲和免疫伤害）
 		if pos_y > 500:
-			hp -= 20
+			if not state_flags.get("void_damage_immune", false):
+				hp -= 20
+			else:
+				state_flags["void_damage_immune"] = false
 			pos_x = spawn_x
 			pos_y = spawn_y
 			vy = 0
@@ -507,6 +535,17 @@ func apply_physics():
 		shield_timer -= 1
 		if shield_timer <= 0:
 			shield_active = false
+	# 通用无敌计时（由 set_invincible 设置）
+	if invincible_timer > 0:
+		invincible_timer -= 1
+		if invincible_timer <= 0:
+			is_invincible = false
+	# 通用霸体计时（由 set_super_armor 设置）
+	if state_flags.get("super_armor_timer", 0) > 0:
+		state_flags["super_armor_timer"] -= 1
+		if state_flags["super_armor_timer"] <= 0:
+			state_flags.erase("super_armor")
+			state_flags.erase("super_armor_timer")
 	# Dragon Knight: 龙鳞护体计时
 	if dragon_scales_active:
 		dragon_scales_timer -= 1
@@ -619,7 +658,7 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 	if target.shield_active:
 		var heal_amount: float = dmg * 0.5
 		if heal_amount > 0:
-			target.hp = minf(target.max_hp, target.hp + heal_amount)
+			try_heal(target, heal_amount)
 			emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 15, Color(0.267, 1.0, 0.533), 3, 5, "circle", 0.5)
 		emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 10, Color(0.533, 0.867, 1.0), 3, 5, "circle", 0.5)
 		return
@@ -653,23 +692,18 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 
 	var final_dmg: float = base_dmg
 
-	# 圣佑：减免50%伤害，免疫击退
+	# 圣佑：免疫击退（减伤由防御力承担，激活时 defense+50）
 	if paladin_comp and paladin_comp.holy_empower_active:
-		final_dmg = maxf(1.0, base_dmg * 0.5)
 		knockback = false
 
-	# 龙鳞护体：减免40%伤害
-	if target.dragon_scales_active:
-		final_dmg = maxf(1.0, final_dmg * 0.6)
-
-	# 龙化形态：减免30%伤害，免疫击退
+	# 龙化形态：免疫击退（减伤由防御力承担）
 	if target.dragon_form_active:
-		final_dmg = maxf(1.0, final_dmg * 0.7)
 		knockback = false
 
-	# 领域减伤（吟游诗人高音领域等）
-	if target.damage_reduction > 0.0:
-		final_dmg = maxf(1.0, final_dmg * (1.0 - target.damage_reduction))
+	# 护甲减伤（护甲公式：减伤率 = defense / (defense + 50)，收益递减；高防御可完全减免伤害）
+	if target.defense > 0.0:
+		var armor_dr: float = target.defense / (target.defense + 50.0)
+		final_dmg = final_dmg * (1.0 - armor_dr)
 
 	# Dragon Knight 龙魂大招：免疫击退和击飞
 	if target.dk_ult_active:
@@ -753,9 +787,55 @@ static func emit_explosion(x: float, y: float, color: Color, count: int = 40):
 		var sz = 3 + randf() * 8
 		GameWorld.particles.append(GameParticle.new(x, y, p_vx, p_vy, color, life, sz, "star"))
 
-# ===== Generic grab interface =====
+# ===== Generic state & grab interface =====
+
+## 无敌：开启 N 帧无敌（N<=0 表示持续直到手动 clear_invincible）
+static func set_invincible(f: Fighter, frames: int = 0):
+	f.is_invincible = true
+	f.invincible_timer = frames if frames > 0 else 0
+
+## 清除无敌
+static func clear_invincible(f: Fighter):
+	f.is_invincible = false
+	f.invincible_timer = 0
+
+## 霸体：开启 N 帧霸体（N<=0 表示持续直到手动 clear_super_armor）
+static func set_super_armor(f: Fighter, frames: int = 0):
+	f.state_flags["super_armor"] = true
+	if frames > 0:
+		f.state_flags["super_armor_timer"] = frames
+	else:
+		f.state_flags.erase("super_armor_timer")
+
+## 清除霸体
+static func clear_super_armor(f: Fighter):
+	f.state_flags.erase("super_armor")
+	f.state_flags.erase("super_armor_timer")
+
+## 抓取对手到指定 x 坐标（以目标中心对齐），返回是否成功
+static func grab_fighter(target: Fighter, teleport_x: float) -> bool:
+	if not target or target.hp <= 0:
+		return false
+	if target.is_invincible:
+		return false
+	target.pos_x = clampf(teleport_x - target.w / 2.0, 10, 2390 - target.w)
+	target.vx = 0
+	target.vy = 0
+	return true
+
+## 持续锁定对手在指定 x 坐标（每帧调用保持定身），返回是否仍被锁定
+static func hold_fighter_in_place(target: Fighter, x: float) -> bool:
+	if not target or target.hp <= 0:
+		return false
+	if target.is_invincible:
+		return false
+	target.pos_x = clampf(x - target.w / 2.0, 10, 2390 - target.w)
+	target.vx = 0
+	target.vy = 0
+	return true
+
+## 抓取矩形区域内的对手，瞬移到指定x坐标。返回是否抓取成功。
 static func grab_fighter_in_rect(grabber: Fighter, area: Rect2, teleport_x: float) -> bool:
-	"""抓取矩形区域内的对手，瞬移到指定x坐标。返回是否抓取成功。"""
 	var target = GameWorld.get_opponent(grabber)
 	if not target or target.hp <= 0:
 		return false
@@ -763,10 +843,7 @@ static func grab_fighter_in_rect(grabber: Fighter, area: Rect2, teleport_x: floa
 		return false
 	if not area.intersects(target.get_hit_box()):
 		return false
-	target.pos_x = clampf(teleport_x - target.w / 2.0, 10, 2390 - target.w)
-	target.vx = 0
-	target.vy = 0
-	return true
+	return grab_fighter(target, teleport_x)
 
 # ===== Collision helpers =====
 static func rect_collide(a: Rect2, b: Rect2) -> bool:
@@ -786,8 +863,14 @@ static func reflect_projectile(proj: Dictionary, defender: Fighter) -> bool:
 	AudioManager.play_sound("parry")
 	return true
 
-## 虚空触碰：默认即死，天赋可通过 on_in_void 拦截
+## 虚空触碰：默认扣 20 血并回出生点；天赋可通过 on_in_void 拦截（如虚空亲和：落入虚空不受伤）
 func _on_void_touch():
+	# 广播虚空事件（天赋可设置 void_damage_immune 拦截本次伤害与回城）
+	if talent_manager:
+		talent_manager.on_in_void({"fighter": self, "pre_hp": hp})
+	if state_flags.get("void_damage_immune", false):
+		state_flags["void_damage_immune"] = false  # 天赋已处理（传送），本次不受伤不传送
+		return
 	hp -= 20
 	pos_x = spawn_x
 	pos_y = spawn_y

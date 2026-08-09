@@ -38,6 +38,7 @@ var domain_img = null
 var domain_color: Color = Color.GOLD
 var domain_cd_applied: bool = false  # 2s CD reduction applied
 var domain_enemy_debuffed: bool = false  # 敌人 debuff 已应用
+var domain_def_applied: bool = false  # 领域防御加成已应用
 var _domain_projectile: Dictionary = {}  # 领域贴图弹射物引用
 
 # 大招：胜过天上的星辰

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cyckyxdgt1tmx"
-path="res://.godot/imported/无标题218_20260805171157.png-8b75d289038edc1b471e635bf4b14723.ctex"
+uid="uid://bov7v861lgjt7"
+path="res://.godot/imported/berserker_ult_f_23.png-c4a10a6f5bc6faee829d42f4643bab7f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/无标题218_20260805171157.png"
-dest_files=["res://.godot/imported/无标题218_20260805171157.png-8b75d289038edc1b471e635bf4b14723.ctex"]
+source_file="res://assets/char_ani/berserker/ult/berserker_ult_f_23.png"
+dest_files=["res://.godot/imported/berserker_ult_f_23.png-c4a10a6f5bc6faee829d42f4643bab7f.ctex"]
 
 [params]
 

@@ -13,6 +13,7 @@ const DragonKnight = preload("res://scripts/characters/dragon_knight.gd")
 const Bard = preload("res://scripts/characters/bard.gd")
 const Astrologer = preload("res://scripts/characters/astrologer.gd")
 const NecroKnight = preload("res://scripts/characters/necro_knight.gd")
+const Berserker = preload("res://scripts/characters/berserker.gd")
 
 # Component preloads
 const COMP_ARCHER = preload("res://scripts/components/archer_component.gd")
@@ -28,6 +29,7 @@ const COMP_DRAGON_KNIGHT = preload("res://scripts/components/char_component.gd")
 const COMP_BARD = preload("res://scripts/components/bard_component.gd")
 const COMP_ASTROLOGER = preload("res://scripts/components/char_component.gd")  # fallback
 const COMP_NECRO_KNIGHT = preload("res://scripts/components/necro_knight_component.gd")
+const COMP_BERSERKER = preload("res://scripts/components/berserker_component.gd")
 
 static var _char_registry := {
 	"knight": { "cls": Knight, "config": null, "comp": COMP_KNIGHT },
@@ -43,6 +45,7 @@ static var _char_registry := {
 	"bard": { "cls": Bard, "config": null, "comp": COMP_BARD },
 	"astrologer": { "cls": Astrologer, "config": null, "comp": COMP_ASTROLOGER },
 	"necro_knight": { "cls": NecroKnight, "config": null, "comp": COMP_NECRO_KNIGHT },
+	"berserker": { "cls": Berserker, "config": null, "comp": COMP_BERSERKER },
 }
 
 static func get_config(char_id: String) -> Dictionary:
@@ -109,6 +112,23 @@ static func call_global_update(char_id: String):
 ## 返回所有已注册角色 ID
 static func get_all_char_ids() -> Array:
 	return _char_registry.keys()
+
+## 调度地狱模式 AI 战术（角色脚本实现，替代 AISystem 中的 match char_id）
+## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），空字符串表示未处理走默认 AI
+static func call_ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("ai_hell_tactics"):
+		return cls.ai_hell_tactics(f, ctx)
+	return ""
+
+## 调度地狱模式专属走位参数（返回空字典表示不覆盖默认走位）
+static func call_ai_hell_desire(f: Fighter) -> Dictionary:
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("ai_hell_desire"):
+		return cls.ai_hell_desire(f)
+	return {}
 
 ## 触发角色开场动画（有 play_intro 方法的角色）
 static func play_intro(char_id: String):

@@ -14,6 +14,7 @@ static func map_game_keys(event: InputEvent, keys: Dictionary):
 		KEY_U: keys["skill1"] = pr
 		KEY_I: keys["skill2"] = pr
 		KEY_O: keys["ult"] = pr
+		KEY_7: keys["sub"] = pr  # 子技能（战吼）
 		KEY_K: keys["talent1"] = pr
 		KEY_L: keys["talent2"] = pr
 		KEY_SEMICOLON: keys["talent3"] = pr

@@ -76,8 +76,8 @@ static func update_projectiles(game_node: Node):
 			GameWorld.projectiles.remove_at(i)
 			continue
 
-		# 6. Blocking / reflect (含骑士招架 damage_reduction >= 0.8)
-		if (target.blocking or target.damage_reduction >= 0.8) and target != p["owner"]:
+		# 6. Blocking / reflect (含骑士招架 parry_reflect)
+		if (target.blocking or target.state_flags.get("parry_reflect", false)) and target != p["owner"]:
 			if _reflect_projectile(p):
 				continue
 
@@ -140,6 +140,11 @@ static func update_projectiles(game_node: Node):
 					else:
 						Fighter.apply_damage(target, p["damage"], p["owner"])
 
+					# 命中击飞（狂战士地裂冲击波等）：launch_vy/launch_vx 覆盖默认击退
+					if p.get("launch_vy", 0.0) != 0.0:
+						target.vy = p["launch_vy"]
+						target.vx = p.get("launch_vx", 0.0)
+
 					# 命中回复能量（骑士强化普攻等）
 					var on_hit_energy = p.get("on_hit_energy", 0)
 					if on_hit_energy > 0 and p["owner"]:
@@ -167,7 +172,7 @@ static func _reset_casting(p: Dictionary):
 
 static func _reflect_projectile(p: Dictionary) -> bool:
 	var defender = GameWorld.get_opponent(p["owner"])
-	if not (defender.blocking or defender.damage_reduction >= 0.8):
+	if not (defender.blocking or defender.state_flags.get("parry_reflect", false)):
 		return false
 	p["vx"] = -p["vx"] * 1.1
 	p["owner"] = defender

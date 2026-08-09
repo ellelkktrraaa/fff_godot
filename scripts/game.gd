@@ -14,7 +14,7 @@ var is_paused := false
 # Input state
 var keys := {
 	"left": false, "right": false, "up": false, "down": false,
-	"attack": false, "skill1": false, "skill2": false, "ult": false,
+	"attack": false, "skill1": false, "skill2": false, "ult": false, "sub": false,
 	"talent1": false, "talent2": false, "talent3": false,
 }
 
@@ -67,7 +67,7 @@ func _ready():
 func _start_game():
 	var ai_char = GameWorld.selected_ai_char_id
 	if ai_char == "":
-		var enemy_chars = ["knight","mage","archer","paladin","witch","assassin","shadowwarrior","evoker","rose"]
+		var enemy_chars = CharacterFactory.get_all_char_ids()
 		ai_char = enemy_chars[randi() % enemy_chars.size()]
 	print("Starting game: player=", GameWorld.selected_char_id, " enemy=", ai_char)
 	# ── 玩家天赋：使用主菜单选择（若无选择则用默认测试集）──
@@ -269,16 +269,17 @@ func _load_random_map():
 			GameWorld.platforms.append({
 				"x": tt.position.x,
 				"y": tt.position.y,
-				"w": tt.block_w,
-				"h": tt.block_h,
+				# 碰撞盒尺寸必须乘以 scale，否则与渲染宽度不一致（见 map3 隐形屏障 bug）
+				"w": tt.block_w * tt.scale.x,
+				"h": tt.block_h * tt.scale.y,
 				"is_ground": is_ground,
 				"is_wall": is_wall,
 				"is_void": is_void,
 				"terrain_type": ttype,
 				# 贴图与缩放：供 RenderSystem 在正确层级（角色/HUD 之下）统一绘制
 				"tex": tt.texture,
-				"scale_x": tt.scale.x,
-				"scale_y": tt.scale.y,
+				"scale_x": 1.0,
+				"scale_y": 1.0,
 			})
 	
 	# 地形块已隐藏场景自渲染，由 RenderSystem 管线统一绘制
@@ -508,7 +509,7 @@ func _do_async_restart():
 
 ## 随机敌方角色（供异步重开预加载与 _restart_game 共用，保证加载与使用一致）
 func _pick_enemy_char() -> String:
-	var enemy_chars = ["knight","mage","archer","paladin","witch","assassin","shadowwarrior","evoker","rose"]
+	var enemy_chars = CharacterFactory.get_all_char_ids()
 	return enemy_chars[randi() % enemy_chars.size()]
 
 ## 收集角色动画目录下所有图片路径（用于后台预加载）

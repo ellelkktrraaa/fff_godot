@@ -29,6 +29,7 @@ const SKILL2_COOLDOWN := 1200      # 20秒
 const DOMAIN_RADIUS := 200.0
 const DOMAIN_WAXING_DURATION := 300   # 5秒
 const DOMAIN_WANING_DURATION := 480   # 8秒
+const DOMAIN_DEFENSE := 21.43         # 月盈领域防御 +21.43（护甲公式等效减伤 30%）
 const DOMAIN_HEAL_RATE := 2.0 / 60.0  # 2点/秒
 const DOMAIN_DAMAGE_RATE := 1.0 / 60.0  # 1点/秒
 const DOMAIN_SLOW_FACTOR := 0.7        # 30%减速
@@ -120,7 +121,7 @@ static func get_config() -> Dictionary:
 			"skills": [
 				{"name": "此刻万籁俱寂（普通攻击）", "desc": "消耗5能量，拨动琴弦随机发射一枚音符弹射物（240px射程）。全8伤 / 二分6伤 / 四分5伤 / 八分4伤 / 十六分2伤。每种命中后收集，未收集音符出现率×5，集齐五种触发紊乱。", "meta": "消耗：5 能 ｜ 冷却：2 秒", "easter_egg": "𝓞𝓻 𝓬𝓱𝓮 '𝓵 𝓬𝓲𝓮𝓵 𝓮𝓽 𝓵𝓪 𝓽𝓮𝓻𝓻𝓪 𝓮 '𝓵 𝓿𝓮𝓷𝓽𝓸 𝓽𝓪𝓬𝓮"},
 				{"name": "我含泪而笑（技能一）", "desc": "连续发射3道声波，每道间隔0.2秒，飞行距离300，每道伤害6。三段声波全部命中敌人直接触发紊乱效果（方向颠倒）持续5秒。", "meta": "消耗：18 能 ｜ 冷却：10 秒", "easter_egg": "𝓙𝓮 𝓻𝓲𝔃 𝓮𝓷 𝓹𝓵𝓮𝓾𝓻𝓼"},
-				{"name": "月相盈亏（技能二）", "desc": "周围200内无敌人时展开高音领域（金色）持续5秒：诗人在领域内受伤-30%，回复2HP/秒，技能冷却-2秒（不可叠加）。有敌人时展开低音领域（暗紫色）持续8秒：敌人在领域内受1伤害/秒，移速跳跃-30%，技能冷却+2秒（不可叠加）。", "meta": "消耗：25 能 ｜ 冷却：20 秒", "easter_egg": "𝓼𝓮𝓶𝓹𝓮𝓻 𝓬𝓻𝓮𝓼𝓬𝓲𝓼 𝓪𝓾𝓽 𝓭𝓮𝓬𝓻𝓮𝓼𝓬𝓲𝓼"},
+				{"name": "月相盈亏（技能二）", "desc": "周围200内无敌人时展开高音领域（金色）持续5秒：诗人在领域内防御力+21.4，回复2HP/秒，技能冷却-2秒（不可叠加）。有敌人时展开低音领域（暗紫色）持续8秒：敌人在领域内受1伤害/秒，移速跳跃-30%，技能冷却+2秒（不可叠加）。", "meta": "消耗：25 能 ｜ 冷却：20 秒", "easter_egg": "𝓼𝓮𝓶𝓹𝓮𝓻 𝓬𝓻𝓮𝓼𝓬𝓲𝓼 𝓪𝓾𝓽 𝓭𝓮𝓬𝓻𝓮𝓼𝓬𝓲𝓼"},
 				{"name": "胜过天上的星辰（大招）", "desc": "在星空下演奏，净化敌人。释放后生成28帧星空动画，第19帧前持续出伤，总计40点伤害。", "meta": "消耗：100 能 ｜ 冷却：5 秒", "easter_egg": "𝓒𝓱𝓲𝓪𝓻𝓸, 𝓵𝓾𝓬𝓮𝓷𝓽𝓮, 𝓹𝓲𝓾 𝓬𝓱𝓮 𝓼𝓽𝓮𝓵𝓵𝓪, 𝓲𝓷 𝓬𝓲𝓮𝓵𝓸"},
 			]
 		},
@@ -381,8 +382,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 			"radius": DOMAIN_RADIUS, "color": comp.domain_color}]
 	, 0)
 
-	# 复位敌人的减速/减伤状态（防止旧领域残留）
-	owner.damage_reduction = 0.0
+	# 复位敌人的减速状态（防止旧领域残留）
 	owner.speed_multiplier = 1.0
 	owner.jump_reduction = 1.0
 	if enemy and enemy.hp > 0:
@@ -401,7 +401,9 @@ static func _update_domain(comp: BardComponent, f: Fighter):
 			comp.domain_type = ""
 			GameWorld.unregister_draw_effect("bard_domain")
 			_remove_domain_projectile(comp)
-			f.damage_reduction = 0.0
+			if comp.domain_def_applied:
+				f.defense = maxf(0.0, f.defense - DOMAIN_DEFENSE)
+				comp.domain_def_applied = false
 			f.speed_multiplier = 1.0
 			f.jump_reduction = 1.0
 			var enemy = GameWorld.get_opponent(f)
@@ -419,17 +421,22 @@ static func _update_domain(comp: BardComponent, f: Fighter):
 		var fy = f.pos_y + f.h / 2.0
 		var dist = sqrt(pow(fx - comp.domain_center_x, 2) + pow(fy - comp.domain_center_y, 2))
 		if dist <= comp.domain_radius:
-			f.damage_reduction = 0.3
+			# 月盈领域：诗人站在领域内获得防御加成（一次性累加）
+			if not comp.domain_def_applied:
+				f.defense += DOMAIN_DEFENSE
+				comp.domain_def_applied = true
 			# 生命恢复（2点/秒）
-			f.hp = minf(f.max_hp, f.hp + DOMAIN_HEAL_RATE)
+			Fighter.try_heal(f, DOMAIN_HEAL_RATE)
 			# 技能冷却减少2秒（一次性，不可叠加）
 			if not comp.domain_cd_applied:
 				for s in f.skills:
 					s.cd = maxi(0, s.cd - SKILL_CD_ADJUST)
 				comp.domain_cd_applied = true
 		else:
-			# 诗人离开领域 → 失去减伤效果
-			f.damage_reduction = 0.0
+			# 诗人离开领域 → 移除防御加成
+			if comp.domain_def_applied:
+				f.defense = maxf(0.0, f.defense - DOMAIN_DEFENSE)
+				comp.domain_def_applied = false
 
 	elif comp.domain_type == "waning" and enemy and enemy.hp > 0:
 		# 月亏：低音领域 — 敌人在领域内
@@ -708,3 +715,57 @@ static func _handle_perform_audio(f: Fighter, active: bool):
 	elif not active and comp._was_perform_active:
 		AudioManager.stop_loop("bard_perform")
 	comp._was_perform_active = active
+
+# ===== 地狱模式 AI（由 AISystem 通过 CharacterFactory 调度，配置驱动） =====
+
+## 地狱模式 AI 战术钩子
+## ctx 字段: target / dist / dir / rand / diff / player / skill1 / skill2 / ult / can_use_s1 / can_use_s2 / can_use_ult
+## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），返回 "" 表示未处理走默认 AI
+static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var comp: BardComponent = f.components.get_component("bard") if f.components else null
+	if not comp:
+		return ""
+	var player = ctx.get("player")
+	var dist = ctx.get("dist", 99999.0)
+	var dir = ctx.get("dir", 1)
+	var rand = ctx.get("rand", 0.0)
+	var skill1: Skill = ctx.get("skill1")
+	var skill2: Skill = ctx.get("skill2")
+	var ult: Skill = ctx.get("ult")
+	var can_use_s1 = ctx.get("can_use_s1", false)
+	var can_use_s2 = ctx.get("can_use_s2", false)
+	var can_use_ult = ctx.get("can_use_ult", false)
+
+	# ① 玩家贴脸逼近 + 低音领域冷却好 → 开领域减速压制
+	if can_use_s2 and not comp.skill2_active and player and player.hp > 0 and dist < 180 and rand < 0.6:
+		f.facing = dir
+		skill2.try_use(f)
+		return "ATTACK"
+
+	# ② 玩家残血 → 大招斩杀（全屏 40 伤）
+	if can_use_ult and player and player.hp > 0 and player.hp < player.max_hp * 0.45 and dist < 500:
+		f.facing = dir
+		ult.try_use(f)
+		return "ATTACK"
+
+	# ③ 同水平线 + 中距离 → 普攻音符风筝（需能量 5）
+	if dist < 350 and f.energy >= 5 and f.attack_cooldown <= 0 and not f.attacking:
+		f.facing = dir
+		f.energy -= 5
+		_fire_note(f, comp)
+		f.attacking = true; f.attack_timer = 30; f.attack_delay = 8
+		f.attack_hit_dealt = false; f.attack_cooldown = 120
+		f.state = "attack"
+		return "ATTACK"
+
+	# ④ 中距离 → 三段声波连招（三中触发紊乱）
+	if can_use_s1 and not comp.skill1_active and dist < 260 and rand < 0.35:
+		f.facing = dir
+		skill1.try_use(f)
+		return "ATTACK"
+
+	return ""
+
+## 地狱模式专属走位参数（空字典表示不覆盖）
+static func ai_hell_desire(f: Fighter) -> Dictionary:
+	return {"min": 200, "max": 380}

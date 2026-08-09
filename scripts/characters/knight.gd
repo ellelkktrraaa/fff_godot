@@ -8,11 +8,14 @@ const PROJ_RENDING_SKILL2 = preload("res://assets/fx_knight_rending_skill2.png")
 const CHAR_CHARGE = preload("res://assets/fx_knight_charge.png")                  # 蓄力中角色贴图
 const PROJ_HALF_MOON = preload("res://assets/fx_knight_half_moon.png")            # 半月斩剑气
 
+# 技能二：不屈回响 — 招架
+const PARRY_DEFENSE := 200.0        # 招架防御 +200（护甲公式等效减伤 80%）
+
 # 大招：战至黎明
 const ULT_ENERGY_COST := 0             # 强化模式能量消耗即为代价
 const ULT_COOLDOWN := 300              # 5秒
 const ENHANCED_ENERGY_DRAIN := 10.0     # 每秒消耗能量
-const ENHANCED_DMG_REDUCTION := 0.2     # 减伤 20%
+const ENHANCED_DEFENSE := 12.5         # 强化模式防御 +12.5（护甲公式等效减伤 20%）
 const ENHANCED_ATK_DMG := 5.0           # 裂空牙伤害
 const ENHANCED_ATK_CD := 90             # 裂空牙冷却 1.5s
 const ENHANCED_ATK_ENERGY := 5          # 命中回复能量
@@ -51,8 +54,8 @@ static func get_config() -> Dictionary:
 			"skills": [
 				{"name": "正义穿刺（普通攻击）", "desc": "用剑刺穿敌人，附带 50 像素前冲位移，造成 5 点伤害。", "meta": "消耗：无 ｜ 冷却：1 秒"},
 				{"name": "半月斩（技能一）", "desc": "蓄力打出半月形剑气。蓄力 <1s：正常大小；1~2s：1.5倍；2~3s：2倍。伤害12，飞行距离400。", "meta": "消耗：15 能 ｜ 冷却：12 秒"},
-				{"name": "不屈回响（技能二）", "desc": "举盾招架1.5s，减伤80%。招架飞行物反弹（速度5）；招架近战释放淡蓝冲击波击退+眩晕2s+降伤20%持续5s。成功回复15能量+伤害提升10%持续5s。若未招架到，可按下普攻释放裂空剑气（穿透+15伤），但冷却+3s（仅单次）。招架结束进入12s冷却。", "meta": "消耗：20 能 ｜ 冷却：12 秒"},
-				{"name": "战至黎明（大招）", "desc": "散发蓝色能量进入强化模式：受伤-20%，普攻变为裂空牙（穿透剑气，5伤，冷却1.5s），命中回复5能量。强化模式下能量消耗10/秒，能量耗尽后结束。", "meta": "消耗：无（强化模式消耗能量） ｜ 冷却：5 秒"},
+				{"name": "不屈回响（技能二）", "desc": "举盾招架1.5s，防御力+200。招架飞行物反弹（速度5）；招架近战释放淡蓝冲击波击退+眩晕2s+降伤20%持续5s。成功回复15能量+伤害提升10%持续5s。若未招架到，可按下普攻释放裂空剑气（穿透+15伤），但冷却+3s（仅单次）。招架结束进入12s冷却。", "meta": "消耗：20 能 ｜ 冷却：12 秒"},
+				{"name": "战至黎明（大招）", "desc": "散发蓝色能量进入强化模式：防御力+12.5，普攻变为裂空牙（穿透剑气，5伤，冷却1.5s），命中回复5能量。强化模式下能量消耗10/秒，能量耗尽后结束。", "meta": "消耗：无（强化模式消耗能量） ｜ 冷却：5 秒"},
 			]
 		},
 	}
@@ -64,7 +67,7 @@ static func create_skills() -> Array:
 		Skill.new("skill2", "不屈回响", 720, 20, func(owner: Fighter): return owner.grounded, Callable(_skill2)),
 	]
 
-## 技能二：不屈回响 — 招架 1.5s，80%减伤，成功反弹/眩晕+回能+加伤
+## 技能二：不屈回响 — 招架 1.5s，防御+200（等效减伤80%），成功反弹/眩晕+回能+加伤
 static func _skill2(owner: Fighter) -> Dictionary:
 	var comp: KnightComponent = owner.components.get_component("knight") if owner.components else null
 	if not comp:
@@ -74,7 +77,8 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	comp.parry_hit = false
 	comp.parry_cd_on_end = true
 	comp.rending_used = false
-	owner.damage_reduction = 0.8
+	owner.defense += PARRY_DEFENSE  # 招架防御 +200（等效减伤 80%）
+	owner.state_flags["parry_reflect"] = true  # 招架期间反弹飞行物
 	owner.set_animation_state("skill2")  # 招架贴图
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 25, Color(1.0, 0.87, 0.27), 4, 6, "star")
 	return {"success": true}
@@ -136,7 +140,7 @@ static func _fire_half_moon(owner: Fighter, comp: KnightComponent):
 	owner.config["animations"]["skill1_end"] = end_anim
 	owner.set_animation_state("skill1_end")
 
-## 大招：战至黎明 — 进入强化模式（减伤+20%，普攻变裂空牙，能量持续消耗）
+## 大招：战至黎明 — 进入强化模式（防御+12.5，普攻变裂空牙，能量持续消耗）
 static func _ult(owner: Fighter) -> Dictionary:
 	var comp: KnightComponent = owner.components.get_component("knight") if owner.components else null
 	if not comp:
@@ -158,7 +162,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	comp.enhanced_mode = true
 	comp.enhanced_drain_timer = 0
 	comp.enhanced_attack_cd = 0
-	owner.damage_reduction += ENHANCED_DMG_REDUCTION
+	owner.defense += ENHANCED_DEFENSE  # 强化模式防御 +12.5（等效减伤 20%）
 	owner.state = "ult"
 	GameWorld.hit_stop = 20
 
@@ -319,7 +323,8 @@ static func update_systems(owner: Fighter):
 		comp.parry_timer -= 1
 		if comp.parry_timer <= 0:
 			comp.parry_active = false
-			owner.damage_reduction -= 0.8  # 还原招架减伤（保留其他来源如强化模式）
+			owner.defense = maxf(0.0, owner.defense - PARRY_DEFENSE)  # 还原招架防御（保留其他来源如强化模式）
+			owner.state_flags.erase("parry_reflect")
 			if owner.image_state == "skill2":
 				owner.image_state = ""
 			# 招架结束（无论成功失败）→ 进入冷却
@@ -361,5 +366,5 @@ static func update_systems(owner: Fighter):
 		# 能量耗尽 → 退出强化模式
 		if owner.energy <= 0:
 			comp.enhanced_mode = false
-			owner.damage_reduction -= ENHANCED_DMG_REDUCTION
+			owner.defense = maxf(0.0, owner.defense - ENHANCED_DEFENSE)
 			owner.energy = 0

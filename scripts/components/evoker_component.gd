@@ -18,8 +18,8 @@ func on_damage_received(attacker: Fighter, dmg: float):
 	if summon.get("state", "") == "随行":
 		var transfer = minf(dmg * 0.6, summon["hp"])
 		summon["hp"] -= transfer
-		owner.hp += transfer
+		Fighter.try_heal(owner, transfer)
 		Fighter.emit_particles(summon["x"] + summon["w"] / 2.0, summon["y"] + summon["h"] / 2.0, 8, Color.RED, 2, 10)
 	if summon.get("type", -1) == 0 and attacker:
 		if signf(attacker.pos_x - summon["x"]) == signf(owner.pos_x - summon["x"]):
-			owner.hp += dmg * 0.2
+			Fighter.try_heal(owner, dmg * 0.2)

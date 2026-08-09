@@ -19,6 +19,7 @@ func update():
 			owner.energy = maxf(0, owner.energy - 10)
 			if owner.energy <= 0:
 				holy_empower_active = false
+				owner.defense = maxf(0.0, owner.defense - 50.0)  # 还原圣佑防御
 	# 角色内部状态：只有角色脚本和伤害系统需要，直接通过组件访问
 
 func on_damage_received(attacker: Fighter, dmg: float):

@@ -37,7 +37,7 @@ func apply_effect(target: Fighter):
 		"energy":
 			target.energy = minf(target.max_energy, target.energy + 20)
 		"health":
-			target.hp = minf(target.max_hp, target.hp + 20)
+			Fighter.try_heal(target, 20)
 		"attack":
 			target.attack_boost = 0.1  # +10% 伤害
 			target.boost_timer = 180

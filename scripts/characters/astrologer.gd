@@ -74,7 +74,7 @@ const ATK_CRATER_H := 40             # 陨石坑高度
 const SKILL1_ENERGY := 30            # 能量消耗
 const SKILL1_COOLDOWN := 180         # 冷却 3秒
 const SKILL1_ATK_PER_1 := 0.08       # 每张 1牌 +8% 攻击力
-const SKILL1_DEF_PER_2 := 0.10       # 每张 2牌 -10% 受伤
+const SKILL1_DEF_PER_2 := 5.56       # 每张 2牌 防御 +5.56（护甲公式等效减伤 10%）
 const SKILL1_CD_PER_3 := 60          # 每张 3牌 二技能冷却 -1秒
 
 # ── 技能二: 塔罗·小阿卡纳 ──
@@ -335,7 +335,7 @@ static func get_config() -> Dictionary:
 			"drawn_cards": [],          # 圣三角已抽卡牌 [{index, period, tex, name_cn}]
 			"skill1_active": false,     # 圣三角是否激活
 			"skill1_atk_boost": 0.0,    # 已应用攻击加成（用于移除）
-			"skill1_def_boost": 0.0,    # 已应用减伤（用于移除）
+			"skill1_def_boost": 0.0,    # 已应用防御（用于移除）
 			"skill1_cd_reduce": 0,      # 二技能冷却减少（帧）
 			"skill2_suit": -1,          # 当前小阿卡纳花色索引 (-1=未抽取)
 			"skill2_name": "The Fool",  # 头顶显示文字（初始为愚者）
@@ -358,9 +358,9 @@ static func get_config() -> Dictionary:
 			"stats": [{"label": "生命", "value": "80"}, {"label": "能量上限", "value": "120"}],
 			"skills": [
 				{"name": "陨星咒（普通攻击）", "desc": "从屏幕外召唤陨石以45°斜向下坠落。身前300像素内有敌人时自动瞄准落点。陨石造成4点伤害，对碰触到的敌人直接伤害（不生成坑）。陨石落地后留下陨石坑持续5秒，敌人站在上面每秒流失1点生命。", "meta": "消耗：5 能量 ｜ 冷却：2 秒"},
-				{"name": "圣三角（技能一）", "desc": "从22张大阿卡纳中随机抽取三张牌显示在屏幕上方，效果持续到下次使用。每张1牌（意识期）+8%攻击力，每张2牌（潜意识期）-10%受伤，每张3牌（超意识期）二技能冷却减少1秒。释放后获得1秒无敌。", "meta": "消耗：30 能量 ｜ 冷却：3 秒"},
+				{"name": "圣三角（技能一）", "desc": "从22张大阿卡纳中随机抽取三张牌显示在屏幕上方，效果持续到下次使用。每张1牌（意识期）+8%攻击力，每张2牌（潜意识期）防御力+5.6，每张3牌（超意识期）二技能冷却减少1秒。释放后获得1秒无敌。", "meta": "消耗：30 能量 ｜ 冷却：3 秒"},
 				{"name": "塔罗·小阿卡纳（技能二）", "desc": "随机抽取小阿卡纳四花色之一释放对应技能：\n• 权杖·星辰余烬：前方向敌人降下天火（10伤害，多帧判定），留下火焰区域持续灼烧（5秒，2伤/秒）[CD 15s]\n• 圣杯·潮汐挽歌：身前召唤潮汐拍打敌人（15伤害，多帧判定）[CD 18s]\n• 宝剑·风神之叹：释放横向龙卷撕裂敌人（18伤害，持续1.3秒，期间不可操作）[CD 20s]\n• 星币·古脉壁立：生成土墙顶飞敌人（10伤害），土墙可阻挡敌人与飞行物（20HP/5秒）[CD 12s]\n\n特殊机制——圣三角主导牌型：1牌最多→权杖概率40%；2牌最多→圣杯概率40%，潮汐附加40%减速3秒；3牌最多→宝剑概率40%，自身移速跳跃+20%持续5秒；三种牌等量→星币概率40%，土墙+5伤害+2秒+10HP。未使用一技能时随机抽取。增强效果不可叠加。", "meta": "消耗：20 能量 ｜ 四花色独立冷却"},
-				{"name": "大招（愚者之旅）", "desc": "发动愚者之旅，从大阿卡纳中抽取「愚者」改变战场。全屏播放塔罗动画，切换战斗背景。所有敌方单位及其飞行物移动/跳跃速度下降50%，伤害减少20%，持续18秒。同时自身技能一二冷却减少2秒。", "meta": "消耗：100 能量 ｜ 冷却：5 秒"},
+				{"name": "大招（愚者之旅）", "desc": "发动愚者之旅，从大阿卡纳中抽取「愚者」改变战场。全屏播放塔罗动画，切换战斗背景。所有敌方单位及其飞行物移动/跳跃速度下降50%，防御力+12.5，持续18秒。同时自身技能一二冷却减少2秒。", "meta": "消耗：100 能量 ｜ 冷却：5 秒"},
 			]
 		},
 	}
@@ -379,7 +379,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	# 如果已有激活的圣三角，先移除旧效果
 	if owner.get_meta("skill1_active"):
 		owner.attack_boost -= owner.get_meta("skill1_atk_boost")
-		owner.damage_reduction -= owner.get_meta("skill1_def_boost")
+		owner.defense -= owner.get_meta("skill1_def_boost")
 		GameWorld.astrologer_cards.clear()
 
 	# 随机抽 3 张不重复
@@ -407,7 +407,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	if atk_boost > 0:
 		owner.attack_boost += atk_boost
 	if def_boost > 0:
-		owner.damage_reduction += def_boost
+		owner.defense += def_boost
 
 	# 存储状态
 	owner.set_meta("drawn_cards", cards)
@@ -417,16 +417,15 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	owner.set_meta("skill1_def_boost", def_boost)
 	owner.set_meta("skill1_cd_reduce", cd_reduce)
 
-	# 释放后获得 1s 无敌（参考 rose 强化二技能机制）
-	owner.is_invincible = true
-	owner.invincible_timer = 60
+	# 释放后获得 1s 无敌（通用接口，由 apply_physics 自动计时）
+	Fighter.set_invincible(owner, 60)
 
 	# 构建加成描述
 	var bonus_parts: Array = []
 	if atk_boost > 0:
 		bonus_parts.append("攻击+%d%%" % int(atk_boost * 100))
 	if def_boost > 0:
-		bonus_parts.append("减伤+%d%%" % int(def_boost * 100))
+		bonus_parts.append("防御+%.1f" % def_boost)
 	if cd_reduce > 0:
 		bonus_parts.append("二技能CD-%ds" % (cd_reduce / 60))
 	var bonus_text = "  ".join(bonus_parts) if bonus_parts.size() > 0 else ""
@@ -709,11 +708,7 @@ static func update_systems(owner: Fighter):
 			GameWorld.astrologer_ult_owner = null
 			GameWorld.astrologer_ult_end_frame = 0
 
-	# ── 圣三角 1s 无敌倒计时（参考 rose 强化二技能机制）──
-	if owner.is_invincible and owner.invincible_timer > 0:
-		owner.invincible_timer -= 1
-		if owner.invincible_timer <= 0:
-			owner.is_invincible = false
+	# ── 圣三角 1s 无敌由 apply_physics 通用计时管理 ──
 
 	# ── 风神之叹加速 buff 倒计时 ──
 	var swords_buff = owner.get_meta("swords_buff_timer", null)
@@ -952,7 +947,7 @@ static func _ult_frame_specs() -> Array:
 		specs.append({"index": i, "duration": dur})
 	return specs
 
-## 大招: 愚者之旅 — 全屏动画 + 背景切换 + 敌方减速/减伤 + 技能冷却缩减
+## 大招: 愚者之旅 — 全屏动画 + 背景切换 + 敌方减速/防御debuff + 技能冷却缩减
 static func _ult(owner: Fighter) -> Dictionary:
 	var ult_anim = FrameAnimation.load_from_frames(ASTROLOGER_ANI_DIR + "ult/", "astrologer_ult_f_", _ult_frame_specs(), false)
 	if ult_anim.frames.is_empty():
@@ -975,7 +970,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	GameWorld.astrologer_ult_bg = ULT_BG
 	GameWorld.astrologer_ult_owner = owner
 
-	# 对所有敌方单位施加 debuff（减速50%、减伤20%、跳跃减半）
+	# 对所有敌方单位施加 debuff（减速50%、防御+12.5、跳跃减半）
 	for e in GameWorld.entities:
 		if e == owner or e.hp <= 0:
 			continue
@@ -1066,3 +1061,61 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	Fighter.apply_movement(owner, mx, speed_mult)
 	Fighter.update_state(owner, mx)
 	return mx
+
+# ===== 地狱模式 AI（由 AISystem 通过 CharacterFactory 调度，配置驱动） =====
+
+## 地狱模式 AI 战术钩子
+## ctx 字段: target / dist / dir / rand / diff / player / skill1 / skill2 / ult / can_use_s1 / can_use_s2 / can_use_ult
+## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），返回 "" 表示未处理走默认 AI
+static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var player = ctx.get("player")
+	var dist = ctx.get("dist", 99999.0)
+	var dir = ctx.get("dir", 1)
+	var rand = ctx.get("rand", 0.0)
+	var skill1: Skill = ctx.get("skill1")
+	var skill2: Skill = ctx.get("skill2")
+	var ult: Skill = ctx.get("ult")
+	var can_use_s1 = ctx.get("can_use_s1", false)
+	var can_use_s2 = ctx.get("can_use_s2", false)
+	var can_use_ult = ctx.get("can_use_ult", false)
+
+	# 风神之叹锁定期间不可操作
+	var lock = f.get_meta("swords_lock_timer", null)
+	if lock != null and lock > 0:
+		f.vx = 0
+		return "ATTACK"
+
+	# ① 无增益 → 优先圣三角（随机三卡，含攻/防/减CD）
+	if can_use_s1 and not f.get_meta("skill1_active"):
+		f.facing = dir
+		skill1.try_use(f)
+		return "ATTACK"
+
+	# ② 玩家残血或贴脸 → 大招愚者之旅
+	if can_use_ult and player and player.hp > 0 and (player.hp < player.max_hp * 0.4 or dist < 200) and rand < 0.5:
+		f.facing = dir
+		ult.try_use(f)
+		return "ATTACK"
+
+	# ③ 中距离 → 小阿卡纳四花色（攻击/土墙阻挡随机出）
+	if can_use_s2 and dist < 420 and rand < 0.45:
+		f.facing = dir
+		skill2.try_use(f)
+		return "ATTACK"
+
+	# ④ 同水平线 + 中距离 → 普攻陨石风筝
+	if dist < 420 and f.energy >= ATK_ENERGY_COST and f.attack_cooldown <= 0 and not f.attacking:
+		f.facing = dir
+		f.energy -= ATK_ENERGY_COST
+		_normal_attack(f)
+		f.attacking = true; f.attack_timer = 30; f.attack_delay = 10
+		f.attack_hit_dealt = true  # 陨石坑 DoT 由 update_systems 处理
+		f.attack_cooldown = ATK_METEOR_COOLDOWN
+		f.state = "attack"
+		return "ATTACK"
+
+	return ""
+
+## 地狱模式专属走位参数（空字典表示不覆盖）
+static func ai_hell_desire(f: Fighter) -> Dictionary:
+	return {"min": 180, "max": 420}

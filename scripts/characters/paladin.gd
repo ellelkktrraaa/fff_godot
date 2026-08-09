@@ -28,7 +28,7 @@ static func get_config() -> Dictionary:
 				{"name": "劈砍（普通攻击）", "desc": "向前劈砍，造成 5 点伤害。", "meta": "消耗：无 ｜ 冷却：1 秒"},
 				{"name": "正义冲锋（技能一）", "desc": "长按蓄力，松开发动冲锋撞击敌人，蓄力越久冲刺越远（最大约 280 像素），造成 15 点伤害。冷却在蓄力结束后开始计算。", "meta": "消耗：无 ｜ 冷却：10 秒"},
 				{"name": "神圣壁垒（技能二）", "desc": "生成持续 4 秒的无敌护盾，吸收所有伤害并以 1:3 比例转化为圣光值（能量）。期间可移动、跳跃、攻击。", "meta": "消耗：无 ｜ 冷却：12 秒"},
-				{"name": "圣佑（大招）", "desc": "需满圣光值释放。进入强化状态，伤害 +5，受伤减半，免疫击飞，持续消耗圣光值（15 点 / 秒）。", "meta": "消耗：15 圣光 / 秒 ｜ 冷却：无"},
+				{"name": "圣佑（大招）", "desc": "需满圣光值释放。进入强化状态，伤害 +5，防御力 +50，免疫击飞，持续消耗圣光值（15 点 / 秒）。", "meta": "消耗：15 圣光 / 秒 ｜ 冷却：无"},
 			]
 		},
 	}
@@ -69,6 +69,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	if comp:
 		comp.holy_empower_active = true
 		comp.holy_empower_timer = 0
+	owner.defense += 50.0  # 圣佑防御 +50（护甲公式等效减伤 50%）
 	Fighter.emit_particles(owner.pos_x+owner.w/2, owner.pos_y+owner.h/2, 120, Color(1.0,0.84,0.0), 14, 18, "star")
 	return {"success": true}
 
