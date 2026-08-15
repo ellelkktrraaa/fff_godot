@@ -964,6 +964,8 @@ func _on_title_clicked(event: InputEvent):
 			GameWorld.infinite_energy = not GameWorld.infinite_energy
 			var status = "开启" if GameWorld.infinite_energy else "关闭"
 			_show_toast("作弊：" + status)
+			# 作弊解锁地图后刷新地图池显示
+			_populate_map_pool()
 
 func _on_exit_pressed():
 	GameWorld.cleanup_draw_callbacks()

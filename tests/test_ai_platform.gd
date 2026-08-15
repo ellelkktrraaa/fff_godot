@@ -17,9 +17,8 @@ func test_reachable_horizontal():
 		{"x": 0, "y": 380, "w": 200, "h": 10, "terrain_type": 0},
 		{"x": 300, "y": 380, "w": 200, "h": 10, "terrain_type": 0},
 	]
-	# 从平台0跳到平台1：间隔100px，move_speed=1.0时 t2≈86.4，reach_r=0+1*86.4=86.4 < 300 → 不可达
-	# 但 move_speed=3.0 时 reach_r=0+3*86.4=259.2 < 300，仍不可达
-	# 用 move_speed=5.0: reach_r=0+5*86.4=432 > 300 → 可达
+	# 同高度平台用跳跃模型 t≈90.9（JUMP_VY=10）
+	# move_speed=5.0 时 reach_r=0+5*90.9=454.5 > 300 → 可达
 	var reachable = TrackSystem._is_platform_reachable(GameWorld.platforms[0], GameWorld.platforms[1], 5.0)
 	assert_true(reachable, "High move_speed → should be reachable")
 
@@ -85,6 +84,7 @@ func before_each():
 	TrackSystem._adj = []
 	TrackSystem._graph_built = false
 	TrackSystem._jump_commit = false
+	TrackSystem._jump_vx = 0
 	TrackSystem._last_vx = 0
 	TrackSystem._last_dir = 0
 	TrackSystem._path = []
@@ -146,12 +146,12 @@ func test_find_path_unreachable():
 
 func test_find_path_multi_hop():
 	# A→B→C 链式可达，A→C 不可达，需要经过 B
-	# at BUILD_MOVE_SPEED=2.0: reach_r=100+2*90.9=281.8
-	# C must start > 281.8
+	# AI 跳跃加成后 BUILD_MOVE_SPEED*1.1=2.2: reach_r=100+2.2*90.9=300
+	# C 起点必须 > 300
 	GameWorld.platforms = [
 		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
 		{"x": 150, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
-		{"x": 290, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
+		{"x": 310, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
 	]
 	var path = TrackSystem._find_path(GameWorld.platforms[0], GameWorld.platforms[2])
 	assert_eq(path.size(), 3, "Three platforms → path length 3")
@@ -227,12 +227,13 @@ func _setup_game_world(enemy: Fighter, player: Fighter):
 	GameWorld.game_mode = "pve"
 
 func test_jump_commit_coasts_in_air():
-	# AI 跳跃承诺期间在空中 → 停止水平输入，让跳跃弧自然飞行
+	# AI 跳跃承诺期间在空中 → 维持起跳时的水平速度，实现水平跳跃
 	var f = _make_ai(true)   # mid-air
 	var p = _make_player()
 	_setup_game_world(f, p)
 	# 跳跃承诺现在由 TrackSystem 管理
 	TrackSystem._jump_commit = true
+	TrackSystem._jump_vx = 2.5
 	# 设置必要的 TrackSystem 状态
 	TrackSystem._path_move_speed = 1.0
 	TrackSystem._path_dir_to_target = 1
@@ -241,7 +242,7 @@ func test_jump_commit_coasts_in_air():
 	var ai_cx = f.pos_x + f.w / 2.0
 	TrackSystem.follow_path(f, ai_cx)
 
-	assert_eq(f.vx, 0.0, "Jump commit + mid-air → vx = 0 (coast)")
+	assert_eq(f.vx, 2.5, "Jump commit + mid-air → vx kept at _jump_vx (horizontal jump)")
 
 func test_jump_commit_cleared_on_ground():
 	# AI 落地后清除跳跃承诺
@@ -271,7 +272,7 @@ func test_intermediate_platform_path_recalculates():
 	GameWorld.platforms = [
 		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},  # A
 		{"x": 150, "y": 380, "w": 100, "h": 10, "terrain_type": 0},  # B
-		{"x": 290, "y": 380, "w": 100, "h": 10, "terrain_type": 0},  # C
+		{"x": 310, "y": 380, "w": 100, "h": 10, "terrain_type": 0},  # C（超出 A 直跳范围）
 	]
 	# AI 在 A，目标在 C → 路径 A→B→C
 	var path_from_a = TrackSystem._find_path(GameWorld.platforms[0], GameWorld.platforms[2])
@@ -284,74 +285,251 @@ func test_intermediate_platform_path_recalculates():
 	assert_eq(path_from_b[1], GameWorld.platforms[2], "Path end = C")
 
 
-# ── 轨迹拦截检测测试 ──
+# ── 轨迹遮挡不影响可达性 ──
 
-func test_trajectory_not_obstructed_no_other_platform():
-	# 只有两个平台 → 无拦截
-	GameWorld.platforms = [
-		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
-		{"x": 120, "y": 380, "w": 100, "h": 10, "terrain_type": 0},
-	]
-	var obstructed = TrackSystem._trajectory_obstructed(GameWorld.platforms[0], GameWorld.platforms[1])
-	assert_false(obstructed, "No other platform → not obstructed")
-
-func test_trajectory_obstructed_by_intermediate():
-	# A→C 的抛物线会被 B 拦截
-	# A(y=380) → B(y=300) → C(y=250)
-	# A→C 经过 B 所在区域 → 应被拦截
+## 遮挡关系不阻止可达性：AI 可先落/跳到中途平台，再落一步继续
+func test_obstruction_does_not_block_reachability():
+	# A→C 的跳跃轨迹会经过 B，但 A→C 仍应可达（先落 B 再继续）
 	GameWorld.platforms = [
 		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},   # A
-		{"x": 80, "y": 300, "w": 60, "h": 10, "terrain_type": 0},  # B：拦截者
-		{"x": 120, "y": 250, "w": 60, "h": 10, "terrain_type": 0}, # C
-	]
-	var obstructed = TrackSystem._trajectory_obstructed(GameWorld.platforms[0], GameWorld.platforms[2])
-	assert_true(obstructed, "A→C parbola should pass through B → obstructed")
-
-func test_trajectory_not_obstructed_by_bystander():
-	# 旁观平台 D 在跳跃区域外 → 不应被拦截
-	# A(y=380) → C(y=250)，D 在远侧
-	GameWorld.platforms = [
-		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},  # A
-		{"x": 300, "y": 250, "w": 80, "h": 10, "terrain_type": 0}, # D：远离轨迹
-		{"x": 120, "y": 250, "w": 60, "h": 10, "terrain_type": 0}, # C
-	]
-	var obstructed = TrackSystem._trajectory_obstructed(GameWorld.platforms[0], GameWorld.platforms[2])
-	assert_false(obstructed, "D is far from trajectory → not obstructed")
-
-func test_graph_skips_obstructed_edge():
-	# A→C 被 B 拦截 → 不应有 A→C 边
-	# 但 A→B 和 B→C 应存在
-	GameWorld.platforms = [
-		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},   # A
-		{"x": 80, "y": 300, "w": 60, "h": 10, "terrain_type": 0},  # B
+		{"x": 80, "y": 300, "w": 60, "h": 10, "terrain_type": 0},  # B：轨迹中途
 		{"x": 120, "y": 250, "w": 60, "h": 10, "terrain_type": 0}, # C
 	]
 	TrackSystem._build_graph()
-	# A→C 被拦截
 	var ac_edge = null
 	for e in TrackSystem._adj[0]:
 		if e["to"] == 2: ac_edge = e
-	assert_null(ac_edge, "A→C blocked by B → no edge")
-	# A→B 应存在
+	assert_not_null(ac_edge, "遮挡不影响可达性 → A→C 应有边")
+	# A→B、B→C 也应有边
 	var ab_edge = null
 	for e in TrackSystem._adj[0]:
 		if e["to"] == 1: ab_edge = e
-	assert_not_null(ab_edge, "A→B should exist")
-	# B→C 应存在
+	assert_not_null(ab_edge, "A→B 应有边")
 	var bc_edge = null
 	for e in TrackSystem._adj[1]:
 		if e["to"] == 2: bc_edge = e
-	assert_not_null(bc_edge, "B→C should exist")
+	assert_not_null(bc_edge, "B→C 应有边")
 
-func test_obstructed_path_finds_alt_route():
-	# A→C 被 B 拦截，路径应走 A→B→C 而非直接 A→C
+func test_obstructed_path_direct_edge():
+	# 无遮挡拦截后，A→C 直连路径应直接存在
 	GameWorld.platforms = [
 		{"x": 0, "y": 380, "w": 100, "h": 10, "terrain_type": 0},   # A
 		{"x": 80, "y": 300, "w": 60, "h": 10, "terrain_type": 0},  # B
 		{"x": 120, "y": 250, "w": 60, "h": 10, "terrain_type": 0}, # C
 	]
 	var path = TrackSystem._find_path(GameWorld.platforms[0], GameWorld.platforms[2])
-	assert_eq(path.size(), 3, "Obstructed → should find A→B→C")
+	assert_eq(path.size(), 2, "A→C 直连可达 → 路径长度 2")
 	assert_eq(path[0], GameWorld.platforms[0], "Path[0] = A")
-	assert_eq(path[1], GameWorld.platforms[1], "Path[1] = B")
-	assert_eq(path[2], GameWorld.platforms[2], "Path[2] = C")
+	assert_eq(path[1], GameWorld.platforms[2], "Path[1] = C")
+
+
+# ── AI 跳跃/下落行为（简化物理模拟） ──
+
+## 模拟 AI 导航 + 简化物理，返回是否到达目标平台
+func _simulate_navigation(ax: float, ay: float, bx: float, by: float) -> bool:
+	GameWorld.difficulty = "easy"
+	GameWorld.phantoms = []
+	GameWorld.evoker_summons = []
+	GameWorld.projectiles = []
+	GameWorld.pickups = []
+	GameWorld.player = Fighter.new()
+	GameWorld.player.setup(bx + 100, by, true, "knight", [])
+	GameWorld.player.hp = 50
+
+	var f = Fighter.new()
+	f.setup(ax, ay - 56, false, "knight", [])
+	f.grounded = true
+	f.hp = 50
+	f.w = 32
+	f.h = 56
+
+	var from_plat = _plat_at(ax, ay)
+	var to_plat = _plat_at(bx, by)
+	TrackSystem.navigate(f, from_plat, to_plat, 0, 80, true)
+	for i in range(400):
+		var ai_cx = f.pos_x + f.w / 2.0
+		TrackSystem.follow_path(f, ai_cx)
+		# 简化物理：地面摩擦（对齐真实物理）+ 重力 + 落地检测（含 passthrough 穿透）
+		if f.grounded and absf(f.vx) > 0.1 and not f.dashing:
+			f.vx *= 0.88
+		elif f.grounded and not f.dashing:
+			f.vx = 0
+		f.pos_x += f.vx
+		f.vy += 0.22
+		f.pos_y += f.vy
+		if f.passthrough_timer > 0:
+			f.passthrough_timer -= 1
+		f.grounded = false
+		for p in GameWorld.platforms:
+			if p.get("terrain_type", -1) == 3:
+				continue
+			if p == f.passthrough_platform:
+				continue
+			if f.vy >= 0 and f.pos_x + f.w > p["x"] + 4 and f.pos_x < p["x"] + p["w"] - 4 \
+				and f.pos_y + f.h >= p["y"] and f.pos_y + f.h <= p["y"] + p["h"] + 6:
+				f.pos_y = p["y"] - f.h
+				f.vy = 0
+				f.grounded = true
+				break
+		if f.grounded and f.pos_x + f.w > to_plat["x"] and f.pos_x < to_plat["x"] + to_plat["w"]:
+			return true
+		if f.pos_y > 500:
+			return false
+	return false
+
+func _plat_at(x: float, y: float):
+	for p in GameWorld.platforms:
+		if p.get("terrain_type", -1) == 3:
+			continue
+		if x >= p["x"] and x <= p["x"] + p["w"] and absf(y - p["y"]) < 20:
+			return p
+	return null
+
+func test_behavior_horizontal_jump_across_void():
+	# 同高度断桥跨虚空 → AI 应水平跳跃到达（vy=-JUMP_VY）
+	GameWorld.platforms = [
+		{"x": 0, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 360, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 0, "y": 409, "w": 700, "h": 90, "terrain_type": 3},
+	]
+	assert_true(_simulate_navigation(50, 380, 400, 380), "同高度平台应能水平跳跃跨过虚空")
+
+func test_behavior_drop_to_lower_platform():
+	# 跳到更低平台 → AI 应走出边缘自然下落到达（vy=0，不下跳）
+	GameWorld.platforms = [
+		{"x": 0, "y": 280, "w": 300, "h": 17, "terrain_type": 0},
+		{"x": 360, "y": 400, "w": 300, "h": 17, "terrain_type": 0},
+	]
+	assert_true(_simulate_navigation(50, 280, 400, 400), "应能自然下落到达更低平台")
+
+func test_behavior_short_jump():
+	# 近距离平台（gap 8px，所需水平速度 < 0.1）→ 空中精确保持小速度，不能垂直跳落空
+	GameWorld.platforms = [
+		{"x": 0, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 308, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+	]
+	assert_true(_simulate_navigation(50, 380, 350, 380), "近距离平台应能精确跳跃到达")
+
+func test_behavior_medium_jump():
+	# 中等距离平台（gap 40px）→ 正常水平跳跃
+	GameWorld.platforms = [
+		{"x": 0, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 340, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+	]
+	assert_true(_simulate_navigation(50, 380, 380, 380), "中等距离平台应能水平跳跃到达")
+
+## 模拟 AI 走向目标，返回 AI 是否从未掉出平台（安全区域生效）
+func _simulate_no_walk_off(ax: float, ay: float, bx: float, by: float) -> bool:
+	GameWorld.difficulty = "easy"
+	GameWorld.phantoms = []
+	GameWorld.evoker_summons = []
+	GameWorld.projectiles = []
+	GameWorld.pickups = []
+	GameWorld.player = Fighter.new()
+	GameWorld.player.setup(bx + 100, by, true, "knight", [])
+	GameWorld.player.hp = 50
+
+	var f = Fighter.new()
+	f.setup(ax, ay - 56, false, "knight", [])
+	f.grounded = true
+	f.hp = 50
+	f.w = 32
+	f.h = 56
+
+	var from_plat = _plat_at(ax, ay)
+	var to_plat = _plat_at(bx, by)
+	TrackSystem.navigate(f, from_plat, to_plat, 0, 80, true)
+	for i in range(400):
+		var ai_cx = f.pos_x + f.w / 2.0
+		TrackSystem.follow_path(f, ai_cx)
+		f.pos_x += f.vx
+		f.vy += 0.22
+		f.pos_y += f.vy
+		if f.passthrough_timer > 0:
+			f.passthrough_timer -= 1
+		f.grounded = false
+		for p in GameWorld.platforms:
+			if p.get("terrain_type", -1) == 3:
+				continue
+			if p == f.passthrough_platform:
+				continue
+			if f.vy >= 0 and f.pos_x + f.w > p["x"] + 4 and f.pos_x < p["x"] + p["w"] - 4 \
+				and f.pos_y + f.h >= p["y"] and f.pos_y + f.h <= p["y"] + p["h"] + 6:
+				f.pos_y = p["y"] - f.h
+				f.vy = 0
+				f.grounded = true
+				break
+		if f.pos_y > 500:
+			return false  # 掉出平台/虚空
+	return true
+
+func test_behavior_safe_zone_unreachable_target():
+	# 目标平台太远（图不可达）→ AI 应停在平台边缘等待，不能走出掉落
+	GameWorld.platforms = [
+		{"x": 0, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 500, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+	]
+	assert_true(_simulate_no_walk_off(50, 380, 550, 380), "不可达目标时 AI 应停在平台内而非掉落")
+
+func test_full_update_ai_jumps():
+	# 完整 update_ai 流程（含 think_delay/攻击分支）：AI 应跳到目标平台
+	GameWorld.platforms = [
+		{"x": 0, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 360, "y": 380, "w": 300, "h": 17, "is_ground": true, "terrain_type": 0},
+		{"x": 0, "y": 409, "w": 700, "h": 90, "terrain_type": 3},
+	]
+	GameWorld.difficulty = "easy"
+	GameWorld.game_mode = "pve"
+	GameWorld.player = Fighter.new()
+	GameWorld.player.setup(400, 324, true, "knight", [])
+	GameWorld.player.hp = 50
+	GameWorld.enemy = Fighter.new()
+	GameWorld.enemy.setup(50, 324, false, "knight", [])
+	GameWorld.enemy.grounded = true
+	GameWorld.enemy.hp = 50
+	GameWorld.projectiles = []
+	GameWorld.pickups = []
+	GameWorld.phantoms = []
+	GameWorld.evoker_summons = []
+	GameWorld.frame = 0
+
+	var delay = 0
+	var reached = false
+	for i in range(600):
+		delay = AISystem.update_ai(delay)
+		# 物理（AI + 玩家）：摩擦 + 重力 + 落地 + 虚空传送
+		for f in [GameWorld.enemy, GameWorld.player]:
+			if f.grounded and absf(f.vx) > 0.1 and not f.dashing:
+				f.vx *= 0.88
+			elif f.grounded and not f.dashing:
+				f.vx = 0
+			f.pos_x += f.vx
+			f.vy += 0.22
+			f.pos_y += f.vy
+			if f.passthrough_timer > 0:
+				f.passthrough_timer -= 1
+			f.grounded = false
+			for p in GameWorld.platforms:
+				if p.get("terrain_type", -1) == 3:
+					continue
+				if p == f.passthrough_platform:
+					continue
+				if f.vy >= 0 and f.pos_x + f.w > p["x"] + 4 and f.pos_x < p["x"] + p["w"] - 4 \
+					and f.pos_y + f.h >= p["y"] and f.pos_y + f.h <= p["y"] + p["h"] + 6:
+					f.pos_y = p["y"] - f.h
+					f.vy = 0
+					f.grounded = true
+					break
+			if f.pos_y > 500:
+				f.pos_x = f.spawn_x
+				f.pos_y = f.spawn_y
+				f.vy = 0
+				f.vx = 0
+				f.grounded = true
+		if GameWorld.enemy.grounded and GameWorld.enemy.pos_x > 360:
+			reached = true
+			print("[full_update] AI 到达目标平台 frame=", i, " pos_x=", GameWorld.enemy.pos_x)
+			break
+		if i % 100 == 0:
+			print("[full_update] frame=", i, " ai_x=", GameWorld.enemy.pos_x, " gnd=", GameWorld.enemy.grounded, " state=", GameWorld.enemy.state)
+	assert_true(reached, "AI 应通过完整 update_ai 跳到目标平台")

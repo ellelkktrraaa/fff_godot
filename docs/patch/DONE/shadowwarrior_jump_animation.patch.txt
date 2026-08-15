@@ -1,0 +1,24 @@
+# ============================================================
+# Patch: shadowwarrior jump 动画（sprite-sheet 版）
+# 目标文件: scripts/characters/shadowwarrior.gd
+# 由工具自动生成，供人工审阅后粘贴。
+# ============================================================
+
+# ── 1) const 区新增 preload（建议放在 SHADOWWARRIOR_ANI_DIR 常量附近） ──
+const SHADOWWARRIOR_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_jump_foot_gaps.gd")
+
+# ── 2) animations 字典中 "jump" 一行替换为（注意原 jump 为 999.0 / loop=true） ──
+"jump": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "jump/sheet.png", 3, 2, 5, 999.0, true, _shadowwarrior_jump_anchors()),
+
+# ── 3) 新增锚点辅助函数（可放在 get_config() 之后） ──
+static func _shadowwarrior_jump_anchors() -> Array:
+	var frames: Array = []
+	for i in range(SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_FOOT.size()):
+		frames.append({
+			"foot_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_FOOT[i],
+			"head_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_HEAD[i],
+			"center_dx": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_CENTER[i],
+			"content_w": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_JUMP_CONTENT_H[i],
+		})
+	return frames

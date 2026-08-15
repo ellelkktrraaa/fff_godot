@@ -1,0 +1,24 @@
+# Patch suggestion for c:/workspace/fff_godot/scripts/characters/assassin.gd
+# Add the "ult_tail" sprite-sheet animation for assassin.
+#
+# 1) Add preload const near the other consts (e.g. after ASSASSIN_ANI_DIR):
+#
+# const ASSASSIN_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_tail_foot_gaps.gd")
+#
+# 2) Add a new line inside the "animations" dictionary (e.g. after the "charge" entry):
+#
+# "ult_tail": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_tail/sheet.png", 3, 2, 6, 0.1, false, _assassin_ult_tail_anchors()),
+#
+# 3) Add the anchor helper function (e.g. after get_config()):
+#
+# static func _assassin_ult_tail_anchors() -> Array:
+# 	var anchors: Array = []
+# 	for i in ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_FOOT.size():
+# 		anchors.append({
+# 			"foot_gap": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_FOOT[i],
+# 			"head_gap": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_HEAD[i],
+# 			"center_dx": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_CENTER[i],
+# 			"content_w": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_CONTENT_W[i],
+# 			"content_h": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_TAIL_CONTENT_H[i],
+# 		})
+# 	return anchors

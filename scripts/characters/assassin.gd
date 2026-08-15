@@ -5,6 +5,8 @@ const AssassinComponent = preload("res://scripts/components/assassin_component.g
 
 const PROJ_SLASH2 = preload("res://assets/fx_assassin_slash.png")
 const ASSASSIN_ANI_DIR = "res://assets/char_ani/assassin/"
+const ASSASSIN_ULT_HEAD_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_head_foot_gaps.gd")
+const ASSASSIN_ULT_TAIL_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_tail_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
@@ -28,6 +30,8 @@ static func get_config() -> Dictionary:
 				{"index": 12, "duration": 0.2}, {"index": 13, "duration": 0.2}
 			], false),
 			"charge": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "charge/", "assassin_charge_f_", [{"index": 1, "duration": 999.0}], true),
+			"ult_head": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors()),
+			"ult_tail": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_tail/sheet.png", 3, 2, 6, 0.06, false, _assassin_ult_tail_anchors()),
 		},
 		"dex": {
 			"icon": "🗡️",
@@ -42,6 +46,32 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## ult_head 动画锚点：把 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _assassin_ult_head_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_FOOT[i],
+			"head_gap": ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_HEAD[i],
+			"center_dx": ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_CENTER[i],
+			"content_w": ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_CONTENT_W[i],
+			"content_h": ASSASSIN_ULT_HEAD_FOOT_GAPS.ASSASSIN_ULT_HEAD_CONTENT_H[i],
+		})
+	return anchors
+
+## ult_tail 动画锚点：同 _assassin_ult_head_anchors 写法
+static func _assassin_ult_tail_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_FOOT[i],
+			"head_gap": ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_HEAD[i],
+			"center_dx": ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_CENTER[i],
+			"content_w": ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_CONTENT_W[i],
+			"content_h": ASSASSIN_ULT_TAIL_FOOT_GAPS.ASSASSIN_ULT_TAIL_CONTENT_H[i],
+		})
+	return anchors
 
 static func _can_use_attack(owner: Fighter) -> bool:
 	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
@@ -123,21 +153,24 @@ static func _ult(owner: Fighter) -> Dictionary:
 		if entry.get("overlay_id") == "assassin_ult":
 			return {"success": false}
 	
-	var anim = FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "ult/", "assassin_ult_f_", [
-		{"index": 0, "duration": 0.2}, {"index": 1, "duration": 0.2}, {"index": 2, "duration": 0.2},
-		{"index": 3, "duration": 0.2}, {"index": 4, "duration": 0.2}, {"index": 5, "duration": 0.2},
-		{"index": 6, "duration": 0.2}, {"index": 7, "duration": 0.2}, {"index": 8, "duration": 0.2},
-		{"index": 9, "duration": 0.2}, {"index": 10, "duration": 0.2}, {"index": 11, "duration": 0.2},
-		{"index": 12, "duration": 0.2}, {"index": 13, "duration": 0.2}
-	], false)
-	if anim.frames.is_empty():
-		return {"success": false}
-	anim.play()
-	
 	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
 	
+	# 大招动画：先播 ult_head（43 帧），播完立即接 ult_tail（6 帧），合并为一段连续动画
+	var head_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors())
+	var tail_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_tail/sheet.png", 3, 2, 6, 0.06, false, _assassin_ult_tail_anchors())
+	var ult_anim := FrameAnimation.new()
+	ult_anim.loop = false
+	for f in head_anim.frames:
+		ult_anim.add_frame(f.texture, f.duration_seconds, f.foot_gap, f.head_gap, f.center_dx, f.content_w, f.content_h)
+	for f in tail_anim.frames:
+		ult_anim.add_frame(f.texture, f.duration_seconds, f.foot_gap, f.head_gap, f.center_dx, f.content_w, f.content_h)
+	if ult_anim.frames.is_empty():
+		return {"success": false}
+	ult_anim.total_duration = head_anim.total_duration + tail_anim.total_duration
+	ult_anim.play()
+	
 	GameWorld.active_overlays.append({
-		"anim": anim,
+		"anim": ult_anim,
 		"position": {"type": "fullscreen"},
 		"owner": owner,
 		"overlay_id": "assassin_ult",
@@ -153,10 +186,10 @@ static func _ult(owner: Fighter) -> Dictionary:
 	
 	if comp:
 		comp.ult_active = true
-		comp.ult_timer = int(anim.total_duration * 60)
+		comp.ult_timer = int(ult_anim.total_duration * 60)
 		comp.ult_damage_timer = 0
 		comp.time_stop = true
-		comp.time_stop_timer = int(anim.total_duration * 60)
+		comp.time_stop_timer = int(ult_anim.total_duration * 60)
 	owner.state = "ult"
 	owner.image_state = "ult"
 	

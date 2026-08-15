@@ -1,0 +1,22 @@
+# Patch 建议：astrologer 技能一土柱（earth pillar）动画接入
+# 目标文件：角色脚本 astrologer.gd（人工审阅后粘贴）
+
+# ---- a) const 区新增 preload（常量名角色级） ----
+const ASTROLOGER_FOOT_GAPS = preload("res://data/foot_gaps/astrologer_skill1_earth_pillar_foot_gaps.gd")
+
+# ---- b) animations 字典里新增/替换一行（"skill1_earth_pillar"） ----
+# 注意：sheet 原始 duration_ms=140（9帧共1.26s，超过0.5s攻击窗口），已调小为 0.05（9*0.05=0.45s<=0.5s）
+"skill1_earth_pillar": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "skill1_earth_pillar/sheet.png", 3, 3, 9, 0.05, false, _astrologer_skill1_earth_pillar_anchors()),
+
+# ---- c) 锚点辅助函数 ----
+func _astrologer_skill1_earth_pillar_anchors() -> Array:
+    var anchors := []
+    for i in range(9):
+        anchors.append({
+            "foot_gap": ASTROLOGER_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT[i],
+            "head_gap": ASTROLOGER_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_HEAD[i],
+            "center_dx": ASTROLOGER_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CENTER[i],
+            "content_w": ASTROLOGER_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CONTENT_W[i],
+            "content_h": ASTROLOGER_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CONTENT_H[i],
+        })
+    return anchors

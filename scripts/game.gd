@@ -445,6 +445,11 @@ func _unhandled_input(event: InputEvent):
 			else:
 				_toggle_pause()
 			return
+		# 调试：F2 切换碰撞体边框显示
+		if event.pressed and event.keycode == KEY_F2:
+			RenderSystem.debug_draw_hitboxes = not RenderSystem.debug_draw_hitboxes
+			print("[DEBUG] hitbox 显示: ", "ON" if RenderSystem.debug_draw_hitboxes else "OFF")
+			return
 		InputRouter.map_game_keys(event, keys)
 		if event.pressed and event.keycode == KEY_R and GameWorld.game_over and not _restart_loading:
 			_begin_async_restart()

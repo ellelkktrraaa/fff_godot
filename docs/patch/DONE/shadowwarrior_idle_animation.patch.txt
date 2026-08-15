@@ -1,0 +1,22 @@
+# 角色: shadowwarrior / 动画: idle
+# 来源导出: 20260812-174050-7517-export-shadowwarrior_idle
+# 目标文件: res://scripts/characters/shadowwarrior.gd（人工审阅后粘贴，工具不直接改角色脚本）
+
+## 1) const 区新增 preload（建议放在 SHADOWWARRIOR_ANI_DIR 定义附近）:
+const SHADOWWARRIOR_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_idle_foot_gaps.gd")
+
+## 2) animations 字典中 "idle" 一行替换为（3 列 x 3 行 x 8 帧, duration=999.0, loop=true, 与现有 idle 参数一致）:
+"idle": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "idle/sheet.png", 3, 3, 8, 999.0, true, _shadowwarrior_idle_anchors()),
+
+## 3) 新增锚点辅助函数（static，供 get_config 静态上下文调用）:
+static func _shadowwarrior_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_FOOT.size():
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_FOOT[i],
+			"head_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_HEAD[i],
+			"center_dx": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_CENTER[i],
+			"content_w": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_IDLE_CONTENT_H[i],
+		})
+	return anchors

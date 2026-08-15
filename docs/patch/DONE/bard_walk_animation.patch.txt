@@ -1,0 +1,21 @@
+# ===== Bard "walk" 动画接入建议（人工审阅后粘贴到 scripts/characters/bard.gd） =====
+
+# ① const 区新增 preload（角色级常量，放在 BARD_ANI_DIR 附近）
+const BARD_FOOT_GAPS = preload("res://data/foot_gaps/bard_walk_foot_gaps.gd")
+
+# ② animations 字典：把 "walk" 一行替换为 sprite sheet 加载
+		"walk": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "walk/sheet.png", 3, 3, 9, 999.0, true, _bard_walk_anchors()),
+
+# ③ 新增锚点辅助函数（参照 _bard_attack_anchors()）
+## 行走动画锚点：把生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _bard_walk_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_FOOT_GAPS.BARD_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_FOOT_GAPS.BARD_WALK_FOOT[i],
+			"head_gap": BARD_FOOT_GAPS.BARD_WALK_HEAD[i],
+			"center_dx": BARD_FOOT_GAPS.BARD_WALK_CENTER[i],
+			"content_w": BARD_FOOT_GAPS.BARD_WALK_CONTENT_W[i],
+			"content_h": BARD_FOOT_GAPS.BARD_WALK_CONTENT_H[i],
+		})
+	return anchors

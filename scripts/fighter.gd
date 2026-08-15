@@ -74,6 +74,7 @@ var state: String = "idle"
 var image_state: String = "idle"
 var current_anim = null # FrameAnimation
 var desired_image_state: String = ""  # 技能代码设置的覆盖状态，优先级高于 apply_physics 推导
+var jump_phase: int = 0  # 跳跃动画阶段：0=无 1=起跳 2=滞空 3=落地倒放（仅 load_jump_sheet 动画启用）
 var damage_flash: int = 0
 
 # Block & shield
@@ -316,6 +317,46 @@ func set_animation_state(state_key: String):
 		current_anim = new_anim
 		if not current_anim.is_playing():
 			current_anim.play()
+
+## 跳跃动画状态机：起跳（前 N-1 帧共 0.2s）→ 滞空（最后一帧保持）→ 落地倒放起跳帧。
+## 仅当该角色 jump 动画由 FrameAnimation.load_jump_sheet 创建时启用；返回 true 表示已接管动画状态。
+func _update_jump_animation() -> bool:
+	var anims: Dictionary = config.get("animations", {})
+	var jump_anim = anims.get("jump")
+	if not (jump_anim is FrameAnimation and jump_anim.jump_sheet):
+		return false
+	if jump_phase == 0 and grounded:
+		return false
+	if jump_phase == 0:
+		# 起跳：从第 0 帧播放起跳帧
+		jump_phase = 1
+		set_animation_state("jump")
+		return true
+	# 跳跃动画可能被攻击/技能/大招打断（current_anim 被换走）：接管回跳跃动画本身，
+	# 否则跳跃状态机每帧返回 true 却不再切回跳跃动画，会永远停在被打断动画的最后一帧
+	if current_anim != jump_anim:
+		current_anim = jump_anim
+		if not jump_anim.is_playing():
+			jump_anim.play()
+	if not grounded:
+		if jump_phase == 3:
+			# 落地倒放中再次起跳 → 重新起跳（直接 play 强制复位）
+			jump_phase = 1
+			jump_anim.play()
+		elif jump_phase == 1 and jump_anim.is_hold_phase():
+			# 起跳帧放完 → 滞空保持
+			jump_phase = 2
+		return true
+	# 已落地：开始倒放起跳帧
+	if jump_phase in [1, 2]:
+		jump_phase = 3
+		jump_anim.start_landing()
+		return true
+	# 落地倒放中：结束后回到常规状态
+	if jump_phase == 3 and jump_anim.is_landing_done():
+		jump_phase = 0
+		set_animation_state("idle")
+	return true
 
 func get_skill(key: String):
 	return skill_map.get(key)
@@ -590,7 +631,9 @@ func apply_physics():
 		set_animation_state("attack")
 	elif state == "ult":
 		set_animation_state("ult")
-	elif not grounded:  # 地面在空中且非凌空飞行
+	elif _update_jump_animation():
+		pass  # 跳跃动画状态机（起跳→滞空→落地倒放）接管
+	elif not grounded:  # 旧式跳跃（未用 load_jump_sheet 的角色保持原单帧行为）
 		set_animation_state("jump")
 	elif state == "walk":
 		set_animation_state("walk")

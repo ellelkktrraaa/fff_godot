@@ -1,0 +1,25 @@
+# ============================================================
+# 建议改动：c:/workspace/fff_godot/scripts/characters/assassin.gd
+# 角色: assassin (刺客)   状态: ult_head
+# 精灵图: assets/char_ani/assassin/ult_head/sheet.png (7x7 网格, 43 帧, 1280x736/帧)
+# 人工粘贴前请审阅；常量名按角色级 ASSASSIN_FOOT_GAPS 命名。
+# ============================================================
+
+# 1) 在文件顶部 const 区新增 preload（角色级，一处即可，供多个状态共用）：
+const ASSASSIN_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_head_foot_gaps.gd")
+
+# 2) get_config() 的 animations 字典中新增/替换 "ult_head" 一行：
+"ult_head": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors()),
+
+# 3) 在类中新增锚点辅助函数（参考 knight.gd 的 _knight_attack_anchors() 写法）：
+static func _assassin_ult_head_anchors() -> Array:
+	var anchors: Array = []
+	for i in ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_FOOT.size():
+		anchors.append({
+			"foot_gap": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_FOOT[i],
+			"head_gap": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_HEAD[i],
+			"center_dx": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_CENTER[i],
+			"content_w": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_CONTENT_W[i],
+			"content_h": ASSASSIN_FOOT_GAPS.ASSASSIN_ULT_HEAD_CONTENT_H[i],
+		})
+	return anchors

@@ -1,0 +1,25 @@
+# witch.gd 动画配置 patch 建议（供人工审阅后粘贴）
+# 目标：把 "idle" 动画从逐帧 load_from_frames 改为 sprite-sheet 加载
+
+## 1. 文件顶部新增（const 区域）：
+const WITCH_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/witch_idle_foot_gaps.gd")
+
+## 2. animations 字典中替换 "idle" 行：
+"idle": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "idle/sheet.png", 5, 4, 17, 999.0, true, _witch_idle_anchors()),
+
+## 3. 新增锚点辅助函数：
+static func _witch_idle_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_FOOT[i],
+			"head_gap": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_HEAD[i],
+			"center_dx": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CENTER[i],
+			"content_w": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CONTENT_W[i],
+			"content_h": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## 说明：
+# - 帧数 17，网格 5 列 × 4 行，cell 768×768，loop=true、duration 999.0（与旧 load_from_frames 一致）
+# - 确认 cell 尺寸与 sheet.png 实际像素一致后再粘贴

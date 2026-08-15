@@ -1,0 +1,22 @@
+# 人工审阅后粘贴到 scripts/characters/rose.gd（三处改动）
+
+# ── 1) const 区新增 preload（放在 ROSE_ANI_DIR 常量附近）──
+const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_jump_foot_gaps.gd")
+
+# ── 2) get_config() 的 animations 字典里 "jump" 一行替换为 ──
+#      原: "jump": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "jump/", "rose_jump_f_", [{"index": 1, "duration": 999.0}], true),
+#      新:
+"jump": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "jump/sheet.png", 2, 2, 4, 999.0, true, _rose_jump_anchors()),
+
+# ── 3) 新增锚点辅助函数（与 _knight_attack_anchors() 同风格）──
+static func _rose_jump_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_FOOT_GAPS.ROSE_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_FOOT_GAPS.ROSE_JUMP_FOOT[i],
+			"head_gap": ROSE_FOOT_GAPS.ROSE_JUMP_HEAD[i],
+			"center_dx": ROSE_FOOT_GAPS.ROSE_JUMP_CENTER[i],
+			"content_w": ROSE_FOOT_GAPS.ROSE_JUMP_CONTENT_W[i],
+			"content_h": ROSE_FOOT_GAPS.ROSE_JUMP_CONTENT_H[i],
+		})
+	return anchors

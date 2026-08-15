@@ -1,0 +1,23 @@
+# rose.gd 改动建议：新增 idle 精灵图动画（FrameAnimation.load_from_sprite_sheet + 锚点对齐）
+
+## 1) const 区新增 preload（放在 ROSE_ANI_DIR 定义附近）
+
+const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_idle_foot_gaps.gd")
+
+## 2) animations 字典中替换 "idle" 一行
+
+"idle": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "idle/sheet.png", 4, 4, 15, 999.0, true, _rose_idle_anchors()),
+
+## 3) 新增锚点辅助函数（放在 get_config() 之前的 static func 区域）
+
+static func _rose_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in ROSE_IDLE_FOOT.size():
+		anchors.append({
+			"foot_gap": ROSE_FOOT_GAPS.ROSE_IDLE_FOOT[i],
+			"head_gap": ROSE_FOOT_GAPS.ROSE_IDLE_HEAD[i],
+			"center_dx": ROSE_FOOT_GAPS.ROSE_IDLE_CENTER[i],
+			"content_w": ROSE_FOOT_GAPS.ROSE_IDLE_CONTENT_W[i],
+			"content_h": ROSE_FOOT_GAPS.ROSE_IDLE_CONTENT_H[i],
+		})
+	return anchors

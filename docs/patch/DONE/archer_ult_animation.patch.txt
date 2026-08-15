@@ -1,0 +1,25 @@
+# archer.gd 动画配置 patch 建议（供人工审阅后粘贴）
+# 目标：把 "ult" 动画从逐帧 load_from_frames 改为 sprite-sheet 加载
+
+## 1. 文件顶部新增（const 区域）：
+const ARCHER_ULT_FOOT_GAPS = preload("res://data/foot_gaps/archer_ult_foot_gaps.gd")
+
+## 2. animations 字典中替换 "ult" 行：
+"ult": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "ult/sheet.png", 3, 2, 6, 3.0, false, _archer_ult_anchors()),
+
+## 3. 新增锚点辅助函数：
+static func _archer_ult_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_FOOT[i],
+			"head_gap": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_HEAD[i],
+			"center_dx": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CENTER[i],
+			"content_w": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CONTENT_W[i],
+			"content_h": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CONTENT_H[i],
+		})
+	return anchors
+
+## 说明：
+# - 帧数 6，网格 3 列 × 2 行，cell 768×1344，duration 3.0（与旧 load_from_frames 一致）
+# - 确认 cell 尺寸与 sheet.png 实际像素一致后再粘贴

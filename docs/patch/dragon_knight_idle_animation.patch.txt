@@ -1,0 +1,27 @@
+## ============================================================
+## dragon_knight idle 动画接入建议（人工审阅后粘贴到角色 .gd）
+## 目标文件：dragon_knight 角色脚本（target_char_file 待人工确认）
+## 生成数据：
+##   - assets/char_ani/dragon_knight/idle/sheet.png        （已落盘）
+##   - data/foot_gaps/dragon_knight_idle_foot_gaps.gd      （已落盘，class_name DRAGON_KNIGHT_IDLE_FootGaps）
+## 网格：4 列 x 3 行，11 帧，720x720/帧，duration 0.1s
+## ============================================================
+
+## a) const 区新增 preload（与既有角色级 const 并列）
+const DRAGON_KNIGHT_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_idle_foot_gaps.gd")
+
+## b) animations 字典中 "idle" 一行的替换/新增建议
+"idle": FrameAnimation.load_from_sprite_sheet(DRAGON_KNIGHT_ANI_DIR + "idle/sheet.png", 4, 3, 11, 0.1, true, _dragon_knight_idle_anchors()),
+
+## c) 锚点辅助函数（追加到类内）
+func _dragon_knight_idle_anchors() -> Array[Dictionary]:
+    var anchors: Array[Dictionary] = []
+    for i in DRAGON_KNIGHT_IDLE_FOOT.size():
+        anchors.append({
+            "foot_gap": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_IDLE_FOOT[i],
+            "head_gap": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_IDLE_HEAD[i],
+            "center_dx": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CENTER[i],
+            "content_w": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CONTENT_W[i],
+            "content_h": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CONTENT_H[i],
+        })
+    return anchors

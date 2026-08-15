@@ -1,0 +1,33 @@
+--- 建议改动：dragon_knight.gd（供人工审阅后粘贴） ---
+
+1) const 区新增（角色级 preload，与其他角色的 *_FOOT_GAPS 并列）：
+
+const DRAGON_KNIGHT_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_skill2_foot_gaps.gd")
+
+2) animations 字典内 "skill2" 条目（新增/替换为）：
+
+"skill2": FrameAnimation.load_from_sprite_sheet(DRAGON_KNIGHT_ANI_DIR + "skill2/sheet.png", 5, 5, 24, 0.02, false, _dragon_knight_skill2_anchors()),
+
+   说明：
+   - 网格 5x5，共 24 帧（最后一格留空）。
+   - duration 取 0.02：24 帧 x 0.02 = 0.48s，保证在 ~0.5s 攻击窗口内播完；
+     sheet 原始 duration_ms=100ms（0.1s）会超窗口（2.4s），故调小。
+     若角色攻击窗口更长，可适当调大（如 0.03 ~ 0.05）。
+   - loop=false（技能类一次性播放）。
+
+3) 新增锚点辅助函数（参考 _knight_attack_anchors() 写法）：
+
+func _dragon_knight_skill2_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_FOOT.size():
+		anchors.append({
+			"foot_gap": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_FOOT[i],
+			"head_gap": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_HEAD[i],
+			"center_dx": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CENTER[i],
+			"content_w": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CONTENT_W[i],
+			"content_h": DRAGON_KNIGHT_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+   说明：CONTENT_W/CONTENT_H 为 -1（人工锚点仅标记 foot_gap/head_gap/center_dx），
+   渲染端以 foot_gap/head_gap 对齐为准。

@@ -1,0 +1,26 @@
+# ============================================================
+# bard idle animation patch - paste manually into scripts/characters/bard.gd
+# Anchor data source: data/foot_gaps/bard_idle_foot_gaps.gd
+# ============================================================
+#
+# 1) Add preload in the const section (near BARD_ANI_DIR):
+#
+const BARD_FOOT_GAPS = preload("res://data/foot_gaps/bard_idle_foot_gaps.gd")
+#
+# 2) Replace the "idle" entry in the animations dict (4 cols x 4 rows, 14 frames, looping idle):
+#
+"idle": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "idle/sheet.png", 4, 4, 14, 999.0, true, _bard_idle_anchors()),
+#
+# 3) Add anchor helper (same pattern as _bard_attack_anchors):
+#
+static func _bard_idle_anchors() -> Array:
+    var anchors := []
+    for i in range(BARD_FOOT_GAPS.BARD_IDLE_FOOT.size()):
+        anchors.append({
+            "foot_gap": BARD_FOOT_GAPS.BARD_IDLE_FOOT[i],
+            "head_gap": BARD_FOOT_GAPS.BARD_IDLE_HEAD[i],
+            "center_dx": BARD_FOOT_GAPS.BARD_IDLE_CENTER[i],
+            "content_w": BARD_FOOT_GAPS.BARD_IDLE_CONTENT_W[i],
+            "content_h": BARD_FOOT_GAPS.BARD_IDLE_CONTENT_H[i],
+        })
+    return anchors

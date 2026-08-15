@@ -1,0 +1,24 @@
+# dragon_knight.gd 动画配置改动建议（供人工审阅后粘贴）
+# 角色: dragon_knight  状态: in_air  帧数: 9  网格: 3x3  帧时长: 0.1s
+# 锚点来源: sheet.json 人工标记 uniform (foot_gap=0, head_gap=0, center_dx=0)
+
+# a) const 区新增 preload（常量名角色级）
+const DRAGON_KNIGHT_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_in_air_foot_gaps.gd")
+
+# b) animations 字典里 "in_air" 一行的替换/新增建议：
+#    "in_air": FrameAnimation.load_from_sprite_sheet(DRAGON_KNIGHT_ANI_DIR + "in_air/sheet.png", 3, 3, 9, 0.1, true, _dragon_knight_in_air_anchors()),
+#    （移动/姿态类默认 0.1s/帧、循环；总时长 0.9s，无攻击窗口约束）
+
+# c) 锚点辅助函数
+func _dragon_knight_in_air_anchors() -> Array:
+    var anchors: Array = []
+    var gaps = DRAGON_KNIGHT_FOOT_GAPS
+    for i in range(gaps.DRAGON_KNIGHT_IN_AIR_FOOT.size()):
+        anchors.append({
+            "foot_gap": gaps.DRAGON_KNIGHT_IN_AIR_FOOT[i],
+            "head_gap": gaps.DRAGON_KNIGHT_IN_AIR_HEAD[i],
+            "center_dx": gaps.DRAGON_KNIGHT_IN_AIR_CENTER[i],
+            "content_w": gaps.DRAGON_KNIGHT_IN_AIR_CONTENT_W[i],
+            "content_h": gaps.DRAGON_KNIGHT_IN_AIR_CONTENT_H[i],
+        })
+    return anchors

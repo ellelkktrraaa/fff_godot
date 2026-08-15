@@ -48,8 +48,11 @@ static func update_ai(ai_think_delay: int) -> int:
 	var dist = absf(dx)
 	var dir_to_target = 1 if dx > 0 else -1
 	
-	# Think delay
+	# Think delay：决策层休息，但执行层持续跟随上次路径
+	# （否则每帧 return 会导致物理摩擦把 vx 磨没，AI 走走停停几乎不动、也不会跳）
 	if ai_think_delay > 0:
+		var ai_cx_d = f.pos_x + f.w / 2.0
+		TrackSystem.follow_path(f, ai_cx_d)
 		_state = "IDLE"
 		return ai_think_delay - 1
 	var new_delay = int(diff["react"] / 16) + randi() % 8
@@ -403,10 +406,9 @@ static func update_ai(ai_think_delay: int) -> int:
 		# dist >= 150: 远处拉开距离（desire_min=200），下方 CHASE/KITE 处理
 	
 	# ── 4. PICKUP: 能量<20% 或 HP<40% → 寻找对应球 ──
-	# 识别 AI 当前所在平台
+	# 识别 AI 当前所在平台（左/右缘落在平台内即算，支持边缘起跳）
 	var ai_cx = f.pos_x + f.w / 2.0
-	var ai_feet_y = f.pos_y + f.h
-	var ai_plat = _find_ai_platform(ai_cx, ai_feet_y)
+	var ai_plat = _find_ai_platform(f)
 
 	var need_energy = f.energy < f.max_energy * 0.2
 	var need_health = f.hp < f.max_hp * 0.4
@@ -657,11 +659,12 @@ static func _evaluate_pickup(f, ai_plat, dist_to_enemy: float, need_energy: bool
 
 # ── 平台辅助 ──
 
-## 查找 AI 所在平台
-static func _find_ai_platform(cx: float, feet_y: float):
+## 查找 AI 所在平台（允许部分伸出边缘：左缘或右缘在平台内）
+static func _find_ai_platform(f):
+	var feet_y = f.pos_y + f.h
 	for p in GameWorld.platforms:
 		if p.get("terrain_type", -1) == 3: continue
-		if _is_on_platform(cx, feet_y, p):
+		if f.pos_x + f.w > p["x"] and f.pos_x < p["x"] + p["w"] and absf(feet_y - p["y"]) < 20:
 			return p
 	return null
 

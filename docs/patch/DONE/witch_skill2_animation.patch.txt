@@ -1,0 +1,25 @@
+# witch.gd 动画配置 patch 建议（供人工审阅后粘贴）
+# 目标：新增 "skill2" 动画（当前 witch.gd animations 字典无该条目，需新增）
+
+## 1. 文件顶部新增（const 区域）：
+const WITCH_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/witch_skill2_foot_gaps.gd")
+
+## 2. animations 字典中新增 "skill2" 行（放在 "ult" 行之前或之后均可）：
+"skill2": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "skill2/sheet.png", 4, 3, 11, 0.1, false, _witch_skill2_anchors()),
+
+## 3. 新增锚点辅助函数：
+static func _witch_skill2_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_FOOT[i],
+			"head_gap": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_HEAD[i],
+			"center_dx": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CENTER[i],
+			"content_w": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_W[i],
+			"content_h": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+## 说明：
+# - 帧数 11，网格 4 列 × 3 行，cell 768×1023，duration 0.1（一次性非循环）
+# - 确认 cell 尺寸与 sheet.png 实际像素一致后再粘贴

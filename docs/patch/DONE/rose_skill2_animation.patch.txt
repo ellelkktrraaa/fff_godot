@@ -1,0 +1,24 @@
+# rose.gd 动画补丁建议（人工审阅后粘贴）
+# 状态: skill2 ｜ 来源: 20260814-144629-ee6a-export-rose_skill2 ｜ 网格: 3x2, 6帧, 960x720
+# 现有 "skill2" 为 _single_frame_anim(ROSE_SKILL2_IMG, 3.0)，建议替换为 sprite-sheet 动画。
+
+## 1) const 区新增 preload（角色级常量名）
+const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_foot_gaps.gd")
+
+## 2) animations 字典中替换/新增 "skill2" 一行：
+# duration 取 0.08：6 帧 x 0.08 = 0.48s <= attack_duration(0.5s)，避免动画未播完被切走
+# （sheet.json duration_ms=100 即 0.1s/帧，6 帧共 0.6s 会超出攻击窗口，故调小）
+"skill2": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.08, false, _rose_skill2_anchors()),
+
+## 3) 新增锚点辅助函数（参考 _rose_idle_anchors 写法）：
+static func _rose_skill2_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_FOOT_GAPS.ROSE_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_FOOT_GAPS.ROSE_SKILL2_FOOT[i],
+			"head_gap": ROSE_FOOT_GAPS.ROSE_SKILL2_HEAD[i],
+			"center_dx": ROSE_FOOT_GAPS.ROSE_SKILL2_CENTER[i],
+			"content_w": ROSE_FOOT_GAPS.ROSE_SKILL2_CONTENT_W[i],
+			"content_h": ROSE_FOOT_GAPS.ROSE_SKILL2_CONTENT_H[i],
+		})
+	return anchors

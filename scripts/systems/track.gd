@@ -8,11 +8,14 @@ const JUMP_VY := 10.0
 
 # ── 有向可达图 ──
 const BUILD_MOVE_SPEED := 2.0
+const AI_JUMP_BONUS := 1.1   # AI 跳跃性能 = 玩家的 1.1 倍（图构建与执行的跳跃水平速度上限）
+const SAFE_MARGIN := 8.0     # 平台安全边距：AI 行走不越过平台边缘，防止无意走出掉落
 static var _adj: Array = []
 static var _graph_built: bool = false
 
 # ── 跳跃状态 ──
 static var _jump_commit: bool = false
+static var _jump_vx := 0.0   # 跳跃期间保持的水平速度（可在 0..vmax 内取值，实现水平跳跃）
 
 # ── 路径状态 ──
 static var _path: Array = []         # 当前完整路径 [plat0, plat1, ...]
@@ -44,10 +47,10 @@ static func navigate(f, from_plat, to_plat, desire_min: float, desire_max: float
 	var diff = Constants.AI_PRESETS.get(GameWorld.difficulty, Constants.AI_PRESETS["medium"])
 	_path_move_speed = diff["move_speed"]
 	
-	# 设置路径
+	# 设置路径（不重置 _jump_commit：跳跃承诺由 follow_path 在落地时清除，
+	# 避免 AI 每帧 navigate 导致空中跳跃时水平速度被清零）
 	if from_plat == null or to_plat == null:
 		_path = []
-		_jump_commit = false
 		return
 	
 	# 方向（朝目标）
@@ -56,23 +59,21 @@ static func navigate(f, from_plat, to_plat, desire_min: float, desire_max: float
 	
 	if from_plat == to_plat:
 		_path = [from_plat]  # 同平台，单元素路径
-		_jump_commit = false
 		return
 	
 	_path = _find_path(from_plat, to_plat)
 	_need_think = false
-	_jump_commit = false
 
 ## 每帧执行路径（同平台走向目标/不同平台图路径+边缘跳跃）
 static func follow_path(f, ai_cx: float) -> void:
 	var move_speed = _path_move_speed
 	var dir_to_target = _path_dir_to_target
 
-	# 跳跃承诺 coast
+	# 跳跃承诺 coast：维持起跳时的水平速度直至落地（支持水平跳跃）
 	if not f.grounded and _jump_commit:
-		f.vx = 0
-		_update_state(f, 0)
-		_last_vx = 0; _last_dir = 0
+		f.vx = _jump_vx
+		_update_state(f, sign(f.vx))
+		_last_vx = f.vx; _last_dir = 1 if f.vx > 0 else -1
 		return
 
 	# 落地清除承诺
@@ -86,12 +87,12 @@ static func follow_path(f, ai_cx: float) -> void:
 		_update_state(f, dir_to_target)
 		return
 
-	# 识别 AI 当前所在平台
+	# 识别 AI 当前所在平台（左/右缘落在平台内即算在平台上，支持边缘起跳）
 	var ai_feet_y = f.pos_y + f.h
 	var ai_plat = null
 	for p in GameWorld.platforms:
 		if p.get("terrain_type", -1) == 3: continue
-		if _is_on_platform(ai_cx, ai_feet_y, p):
+		if _ai_on_platform(f, p):
 			ai_plat = p
 			break
 
@@ -120,23 +121,16 @@ static func follow_path(f, ai_cx: float) -> void:
 		_follow_path_step(f, ai_plat, next_plat, move_speed, dir_to_target, ai_cx)
 		return
 
-	# 无可达路径 → 朝目标方向走，到边缘起跳尝试
+	# 无可达路径 → 朝目标方向走，但受安全区域限制：到边缘停下等待重新规划，
+	# 不做盲跳（图不可达时盲跳大概率掉虚空）
 	if ai_plat != null and f.grounded:
-		var dir_to_plat := 0
-		var ai_cx_check = f.pos_x + f.w / 2
-		if ai_cx_check < ai_plat["x"] + ai_plat["w"] / 2:
-			dir_to_plat = 1
+		var dir_to_plat := 1 if _target_x > f.pos_x else -1
+		var safe_l: float = ai_plat["x"] + SAFE_MARGIN
+		var safe_r: float = ai_plat["x"] + ai_plat["w"] - SAFE_MARGIN
+		if (dir_to_plat > 0 and f.pos_x >= safe_r) or (dir_to_plat < 0 and f.pos_x <= safe_l):
+			f.vx = 0  # 已到安全边界 → 停下
 		else:
-			dir_to_plat = -1
-		f.vx = dir_to_plat * move_speed * 0.8
-		var at_edge = false
-		if dir_to_plat > 0:
-			at_edge = absf(f.pos_x - (ai_plat["x"] + ai_plat["w"])) < 60
-		else:
-			at_edge = absf(f.pos_x - ai_plat["x"]) < 60
-		if at_edge:
-			f.vy = -JUMP_VY
-			_jump_commit = true
+			f.vx = dir_to_plat * move_speed * 0.8
 		_last_vx = f.vx; _last_dir = dir_to_plat
 		_update_state(f, dir_to_plat)
 		return
@@ -153,55 +147,104 @@ static func follow_path(f, ai_cx: float) -> void:
 # ── 需要重新规划路径标志 ──
 static var _need_think: bool = true
 
-# ── 沿路径走一步（边缘检测 + 起跳） ──
+# ── 沿路径走一步（边缘检测 + 起跳/下落） ──
 static func _follow_path_step(f, ai_plat, next_plat, move_speed: float, dir_to_target: int, ai_cx: float):
-	var is_above = next_plat["y"] < ai_plat["y"]
+	var from_y: float = ai_plat["y"]
+	var to_y: float = next_plat["y"]
+	var next_l: float = next_plat["x"]
+	var next_r: float = next_plat["x"] + next_plat["w"]
 
-	# 悬挂平台下落
-	if not is_above and not ai_plat.get("is_ground", false) and f.grounded:
-		f.passthrough_platform = ai_plat
-		f.passthrough_timer = 10
-		f.grounded = false
-		f.vy = 1
-		f.vx = dir_to_target * move_speed * 1.5
-		_last_vx = f.vx; _last_dir = dir_to_target
-		_update_state(f, dir_to_target)
+	# 滞空时间：vy 只有两个取值——
+	#   目标在下方 → 走出平台自然下落（vy=0 起，重力加速）
+	#   目标在上方/同高 → 起跳（vy=-JUMP_VY 的抛物线）
+	var dy: float = from_y - to_y  # 正 = 目标在上方
+	var t_air: float = 0.0
+	if dy < 0.0:
+		t_air = sqrt(2.0 * (to_y - from_y) / GRAVITY)
+	else:
+		var disc: float = JUMP_VY * JUMP_VY - 2.0 * GRAVITY * dy
+		if disc >= 0.0:
+			t_air = (JUMP_VY + sqrt(disc)) / GRAVITY
+
+	var speed_mult: float = 1.5 if _rush else 1.0
+	# 水平速度上限：至少达到图构建假设（BUILD_MOVE_SPEED），再乘 AI 跳跃加成
+	var vmax: float = maxf(move_speed * speed_mult, BUILD_MOVE_SPEED) * AI_JUMP_BONUS
+
+	# 已在目标平台 x 范围内 → 直接执行（上方/同高垂直跳，下方自然下落）
+	if ai_cx >= next_l and ai_cx <= next_r and f.grounded:
+		if dy >= 0.0:
+			_start_jump(f, 0.0, dir_to_target)
+		else:
+			_start_drop(f, ai_plat, 0.0, dir_to_target, t_air)
 		return
 
 	# 方向：走向 next_plat 的 x 范围
-	var next_l = next_plat["x"]
-	var next_r = next_plat["x"] + next_plat["w"]
 	var dir := 0
 	if ai_cx < next_l:
 		dir = 1
 	elif ai_cx > next_r:
 		dir = -1
 	else:
-		# 已在目标 x 范围内 → 直上跳
-		if is_above and f.grounded:
-			f.vx = 0
-			f.vy = -JUMP_VY
-			_jump_commit = true
-			_last_vx = 0; _last_dir = 0
-			_update_state(f, 0)
-			return
 		dir = dir_to_target
 
-	# 速度：rush 模式 1.5x，否则 1.0x
-	var speed_mult = 1.5 if _rush else 1.0
-	f.vx = dir * move_speed * speed_mult
+	# 移动（安全区域：AI 行走不越过平台边缘，防止 v 不够时走出掉落）
+	var safe_l: float = ai_plat["x"] + SAFE_MARGIN
+	var safe_r: float = ai_plat["x"] + ai_plat["w"] - SAFE_MARGIN
+	if (dir > 0 and f.pos_x >= safe_r) or (dir < 0 and f.pos_x <= safe_l):
+		f.vx = 0  # 已到安全边界 → 停下等待起跳/下落
+	else:
+		f.vx = dir * move_speed * speed_mult
 
-	# 起跳检测（到边缘起跳）
-	var edge_threshold = 40 if _rush else 60
-	var at_edge = absf(f.pos_x - (ai_plat["x"] + ai_plat["w"] if dir > 0 else ai_plat["x"])) < edge_threshold
-	if is_above and at_edge and f.grounded:
-		var target_cx = (next_l + next_r) / 2.0
-		var jump_dir = 1 if target_cx > f.pos_x else -1
-		f.vx = jump_dir * move_speed * speed_mult
-		f.vy = -JUMP_VY
-		_jump_commit = true
+	# 到边缘起跳/下落：水平速度在 0..vmax 内取值，落点瞄准目标平台近边缘
+	var edge_threshold: int = 40 if _rush else 60
+	var at_edge: bool = absf(f.pos_x - (ai_plat["x"] + ai_plat["w"] if dir > 0 else ai_plat["x"])) < edge_threshold
+	if at_edge and f.grounded and t_air > 0.0:
+		# 目标平台近边缘：向右跳瞄准左缘，向左跳瞄准右缘，保证落点在平台内
+		var aim_x: float = next_l if dir > 0 else next_r
+		# 空中有效飞行帧数 = t_air - 1：起跳/下落帧水平速度置 0
+		# （避开地面物理的摩擦衰减与 |vx|<=0.1 清零，空中可精确保持任意小速度）
+		var t_flight: float = maxf(t_air - 1.0, 1.0)
+		var v: float = clampf((aim_x - f.pos_x) / t_flight, -vmax, vmax)
+		# 落点（AI 左缘）：需满足物理落地判定（AI 右缘深入平台 >= 4px），避免落空掉虚空
+		var land_x: float = f.pos_x + v * t_flight
+		var touch_ok: bool = (dir > 0 and land_x + f.w > next_l + 4) or (dir < 0 and land_x < next_r - 4)
+		if not touch_ok:
+			# 落点够不到目标平台 → 本帧继续走向边缘，下帧再跳
+			_last_vx = f.vx; _last_dir = dir
+			_update_state(f, dir)
+			return
+		if dy < 0.0:
+			_start_drop(f, ai_plat, v, dir, t_air)
+		else:
+			_start_jump(f, v, dir)
+		return
 
 	_last_vx = f.vx; _last_dir = dir
+	_update_state(f, dir)
+
+# ── 起跳/下落辅助 ──
+
+## 起跳：vy=-JUMP_VY。起跳帧 vx 置 0（地面物理会把小速度清零），空中保持 air_vx
+static func _start_jump(f, air_vx: float, dir: int):
+	f.vx = 0
+	f.vy = -JUMP_VY
+	_jump_commit = true
+	_jump_vx = air_vx
+	_last_vx = air_vx
+	_last_dir = dir
+	_update_state(f, dir)
+
+## 自然下落：走出边缘，vy 从 0 起。同样起跳帧 vx 置 0，空中保持 air_vx
+static func _start_drop(f, from_plat, air_vx: float, dir: int, t_air: float):
+	f.passthrough_platform = from_plat  # 穿透当前平台，避免下落时被原平台顶部接住
+	f.passthrough_timer = maxi(30, int(t_air) + 20)
+	f.grounded = false
+	f.vy = 0
+	f.vx = 0
+	_jump_commit = true
+	_jump_vx = air_vx
+	_last_vx = air_vx
+	_last_dir = dir
 	_update_state(f, dir)
 
 # ── 辅助：获取目标 x 位置 ──
@@ -225,54 +268,32 @@ static func _is_on_platform(x: float, y: float, p: Dictionary) -> bool:
 	if p.get("terrain_type", -1) == 3: return false
 	return x >= p["x"] and x <= p["x"] + p["w"] and absf(y - p["y"]) < 20
 
+## AI 是否站在平台 p 上（允许部分伸出边缘：左缘或右缘在平台内）
+static func _ai_on_platform(f, p: Dictionary) -> bool:
+	if p.get("terrain_type", -1) == 3: return false
+	if absf((f.pos_y + f.h) - p["y"]) > 20: return false
+	return f.pos_x + f.w > p["x"] and f.pos_x < p["x"] + p["w"]
+
 static func _get_reachable_x_interval(plat: Dictionary, target_y: float, move_speed: float) -> Array:
+	# vy 只有两个取值，覆盖区域 = 平台 x 范围 ± vmax*t：
+	#   目标在下方 → 走出边缘自然下落（vy=0 起，重力加速）
+	#   目标在上方/同高 → 起跳（vy=-JUMP_VY 的抛物线）
+	# 水平速度 v 可在 0..move_speed 内任意取值，落点可在区间内任意选择
 	var a_l = plat["x"]; var a_r = plat["x"] + plat["w"]; var a_y = plat["y"]
-	if target_y < a_y:
-		var dy = a_y - target_y
-		var h_max = JUMP_VY * JUMP_VY / (2.0 * GRAVITY)
-		if dy > h_max: return []
+	var dy = a_y - target_y  # 正 = 目标在上方
+	var t := 0.0
+	if dy < 0.0:
+		t = sqrt(2.0 * (target_y - a_y) / GRAVITY)
+	else:
 		var disc = JUMP_VY * JUMP_VY - 2.0 * GRAVITY * dy
-		if disc < 0: return []
-		var t2 = (JUMP_VY + sqrt(disc)) / GRAVITY
-		return [a_l - move_speed * t2, a_r + move_speed * t2]
-	if target_y > a_y:
-		if plat.get("is_ground", false): return []
-		var t_fall = sqrt(2.0 * (target_y - a_y) / GRAVITY)
-		return [a_l - move_speed * t_fall, a_r + move_speed * t_fall]
-	var t_land = 2.0 * JUMP_VY / GRAVITY
-	return [a_l - move_speed * t_land, a_r + move_speed * t_land]
+		if disc < 0: return []  # 目标过高
+		t = (JUMP_VY + sqrt(disc)) / GRAVITY
+	return [a_l - move_speed * t, a_r + move_speed * t]
 
 static func _is_platform_reachable(from_plat: Dictionary, to_plat: Dictionary, move_speed: float) -> bool:
 	if from_plat.get("terrain_type", -1) == 3 or to_plat.get("terrain_type", -1) == 3: return false
-	var from_y = from_plat["y"]; var to_y = to_plat["y"]
-	var h_max = JUMP_VY * JUMP_VY / (2.0 * GRAVITY)
-	if from_y - to_y > h_max: return false
-	var interval = _get_reachable_x_interval(from_plat, to_y, move_speed)
+	var interval = _get_reachable_x_interval(from_plat, to_plat["y"], move_speed)
 	return interval.size() >= 2 and not (to_plat["x"] + to_plat["w"] < interval[0] or to_plat["x"] > interval[1])
-
-static func _trajectory_obstructed(from_plat: Dictionary, to_plat: Dictionary) -> bool:
-	var from_y = from_plat["y"]; var from_l = from_plat["x"]; var from_r = from_plat["x"] + from_plat["w"]
-	var from_cx = from_plat["x"] + from_plat["w"] / 2.0; var to_cx = to_plat["x"] + to_plat["w"] / 2.0
-	var dir = 1 if to_cx > from_cx else -1
-	var takeoff_x = from_r if dir > 0 else from_l; var takeoff_y = from_y; var target_y = to_plat["y"]
-	var t_total := 0.0
-	if target_y < from_y:
-		var dy = from_y - target_y; var disc = JUMP_VY * JUMP_VY - 2.0 * GRAVITY * dy
-		if disc < 0: return false
-		t_total = (JUMP_VY + sqrt(disc)) / GRAVITY
-	else: t_total = 2.0 * JUMP_VY / GRAVITY
-	var t := 6.0
-	while t < t_total:
-		var x = takeoff_x + dir * BUILD_MOVE_SPEED * t
-		var y = takeoff_y - JUMP_VY * t + 0.5 * GRAVITY * t * t
-		for plat in GameWorld.platforms:
-			if plat == from_plat or plat == to_plat: continue
-			if plat.get("terrain_type", -1) == 3: continue
-			var plat_y = plat["y"]
-			if plat_y < mini(from_y, target_y) or plat_y > maxi(from_y, target_y): continue
-			if _is_on_platform(x, y, plat): return true
-		t += 4.0
-	return false
 
 static func _build_graph() -> void:
 	var n = GameWorld.platforms.size()
@@ -285,7 +306,9 @@ static func _build_graph() -> void:
 			if i == j: continue
 			var to_plat = GameWorld.platforms[j]
 			if to_plat.get("terrain_type", -1) == 3: continue
-			if _is_platform_reachable(from_plat, to_plat, BUILD_MOVE_SPEED) and not _trajectory_obstructed(from_plat, to_plat):
+			# 遮挡不影响可达性：中途平台可先落/跳一步再继续，故不做轨迹拦截检查
+			# AI 跳跃性能 = 玩家 * 1.1，可达范围相应扩大
+			if _is_platform_reachable(from_plat, to_plat, BUILD_MOVE_SPEED * AI_JUMP_BONUS):
 				var from_cx = from_plat["x"] + from_plat["w"] / 2.0; var to_cx = to_plat["x"] + to_plat["w"] / 2.0
 				_adj[i].append({"to": j, "weight": sqrt((to_cx - from_cx) * (to_cx - from_cx) + (to_plat["y"] - from_plat["y"]) * (to_plat["y"] - from_plat["y"]))})
 	_graph_built = true

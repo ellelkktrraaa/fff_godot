@@ -20,6 +20,9 @@ const SW_BREAK_SHADOW  = preload("res://assets/char_ani/shadowwarrior/break_shad
 const SW_FADE_IN_SHADOW = preload("res://assets/char_ani/shadowwarrior/fade_in_shadow.png")
 
 const SHADOWWARRIOR_ANI_DIR = "res://assets/char_ani/shadowwarrior/"
+const SHADOWWARRIOR_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_idle_foot_gaps.gd")
+const SHADOWWARRIOR_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_jump_foot_gaps.gd")
+const SHADOWWARRIOR_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_attack_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
@@ -29,10 +32,10 @@ static func get_config() -> Dictionary:
 		"fields": {"stealth_active":false,"stealth_timer":0,"last_skill_time":-999,"retreat_timer":0,"retreat_dir":1,"break_strike_timer":0,"pending_trap":false,"shadow_trap_active":false,"shadow_trap":{},"pending_clones":false,"clone_reveal_timer":0,"iaido_active":false,"iaido_timer":0,"iaido_frozen":false,"iaido_dir":1,"iaido_slash":{}},
 		"world_arrays": ["phantoms"],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "idle/", "shadowwarrior_idle_f_", [{"index": 1, "duration": 999.0}], true),
+			"idle": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "idle/sheet.png", 3, 3, 8, 0.1, true, _shadowwarrior_idle_anchors()),
 			"walk": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "walk/", "shadowwarrior_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "jump/", "shadowwarrior_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "attack/", "shadowwarrior_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"jump": FrameAnimation.load_jump_sheet(SHADOWWARRIOR_ANI_DIR + "jump/sheet.png", 3, 2, 4, 0.2, _shadowwarrior_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _shadowwarrior_attack_anchors()),
 			"ult": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "ult/", "shadowwarrior_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
 		"dex": {
@@ -48,6 +51,45 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## idle 动画锚点：把 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _shadowwarrior_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_FOOT[i],
+			"head_gap": SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_HEAD[i],
+			"center_dx": SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_CENTER[i],
+			"content_w": SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_IDLE_FOOT_GAPS.SHADOWWARRIOR_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## jump 动画锚点：同 _shadowwarrior_idle_anchors 写法
+static func _shadowwarrior_jump_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_FOOT[i],
+			"head_gap": SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_HEAD[i],
+			"center_dx": SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_CENTER[i],
+			"content_w": SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_JUMP_FOOT_GAPS.SHADOWWARRIOR_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## attack 动画锚点：同 _shadowwarrior_idle_anchors 写法
+static func _shadowwarrior_attack_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_FOOT[i],
+			"head_gap": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_HEAD[i],
+			"center_dx": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CENTER[i],
+			"content_w": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CONTENT_H[i],
+		})
+	return anchors
 
 static func _can_use_skill1(owner: Fighter) -> bool:
 	var comp: ShadowwarriorComponent = owner.components.get_component("shadowwarrior") if owner.components else null
@@ -122,6 +164,9 @@ static func update_systems(f: Fighter):
 	var comp: ShadowwarriorComponent = f.components.get_component("shadowwarrior") if f.components else null
 	if not comp:
 		return
+	# 动画帧推进（多帧 sprite-sheet 动画需要每帧 update 才能换帧）
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
 	# ── 绘制注入（每帧更新）──
 	_inject_draw(f, comp)
 	# ── 冲刺伤害覆盖：破影一击 10 点 ──

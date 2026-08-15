@@ -1,0 +1,30 @@
+# ============================================================
+# rose.gd 接入补丁：ult 动画改用 sprite-sheet（54 帧）
+# 请人工审阅后粘贴到 scripts/characters/rose.gd
+# ============================================================
+
+# --- 1) const 区新增（与 ROSE_ANI_DIR / ROSE_IDLE_FOOT_GAPS 等并列）---
+const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_ult_foot_gaps.gd")
+
+# --- 2) animations 字典中 "ult" 行替换为 ---
+"ult": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors()),
+
+# --- 3) 新增锚点辅助函数（参照 _rose_idle_anchors 写法）---
+static func _rose_ult_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_FOOT_GAPS.ROSE_ULT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_FOOT_GAPS.ROSE_ULT_FOOT[i],
+			"head_gap": ROSE_FOOT_GAPS.ROSE_ULT_HEAD[i],
+			"center_dx": ROSE_FOOT_GAPS.ROSE_ULT_CENTER[i],
+			"content_w": ROSE_FOOT_GAPS.ROSE_ULT_CONTENT_W[i],
+			"content_h": ROSE_FOOT_GAPS.ROSE_ULT_CONTENT_H[i],
+		})
+	return anchors
+
+# --- 4) 人工注意：_ult() 内部（原第 443-446 行）也调用了
+#     FrameAnimation.load_from_frames(ROSE_ANI_DIR + "ult/", "rose_ult_f_", [...], false)
+#     创建全屏 overlay 动画；该帧目录已被本次 sprite-sheet 取代。
+#     建议同步改为 load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors())，
+#     否则实际播出的 overlay 仍是旧帧序列，animations 字典的 ult 不会生效。
+#     另外时长：54 帧 x 0.1s = 5.4s（旧帧序列合计约 3.5s），如需贴近旧时长可调小 duration（如 0.065 ≈ 3.5s）。

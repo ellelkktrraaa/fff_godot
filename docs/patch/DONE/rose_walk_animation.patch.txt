@@ -1,0 +1,26 @@
+# rose walk 动画 patch 建议（人工审阅后粘贴到 scripts/characters/rose.gd）
+#
+# 说明：
+# - const ROSE_WALK_FOOT_GAPS 与 _rose_walk_anchors() 在 rose.gd 已存在，无需新增/修改。
+# - 本次新导出为 10 帧（4 列 x 3 行），旧配置为 16 帧（4 列 x 4 行），
+#   需更新 animations 字典中 "walk" 一行的 columns/rows/frame_count。
+# - 人工锚点统一 foot_gap=70 / head_gap=50 / center_dx=0，生成的 CONTENT_W/H 为 -1 属预期。
+
+# ── a) const 区新增 preload（已存在，无改动） ──
+# const ROSE_WALK_FOOT_GAPS = preload("res://data/foot_gaps/rose_walk_foot_gaps.gd")
+
+# ── b) animations 字典 "walk" 行替换为 ──
+"walk": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "walk/sheet.png", 4, 3, 10, 0.1, true, _rose_walk_anchors()),
+
+# ── c) 锚点辅助函数（已存在，无改动，供对照） ──
+static func _rose_walk_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_WALK_FOOT_GAPS.ROSE_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_WALK_FOOT_GAPS.ROSE_WALK_FOOT[i],
+			"head_gap": ROSE_WALK_FOOT_GAPS.ROSE_WALK_HEAD[i],
+			"center_dx": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CENTER[i],
+			"content_w": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CONTENT_W[i],
+			"content_h": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CONTENT_H[i],
+		})
+	return anchors

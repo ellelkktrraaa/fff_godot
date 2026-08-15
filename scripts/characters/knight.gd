@@ -2,6 +2,8 @@
 class_name KnightCharacter
 
 const KNIGHT_ANI_DIR = "res://assets/char_ani/knight/"
+const KNIGHT_FOOT_GAPS = preload("res://data/foot_gaps/knight_attack_foot_gaps.gd")
+const KNIGHT_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/knight_skill2_foot_gaps.gd")
 const PROJ_RENDING = preload("res://assets/fx_knight_rending_wave.png")       # 裂空牙剑气（强化普攻）
 const CHAR_ENHANCED_ATK = preload("res://assets/fx_knight_enhanced_rending.png")  # 强化普攻/蓄力结束角色贴图
 const PROJ_RENDING_SKILL2 = preload("res://assets/fx_knight_rending_skill2.png")  # 二技能裂空剑气
@@ -43,8 +45,8 @@ static func get_config() -> Dictionary:
 			"idle": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "idle/", "knight_idle_f_", [{"index": 1, "duration": 999.0}], true),
 			"walk": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "walk/", "knight_walk_f_", [{"index": 1, "duration": 999.0}], true),
 			"jump": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "jump/", "knight_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "attack/", "knight_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"skill2": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "skill2/", "knight_skill2_f_", [{"index": 1, "duration": 999.0}], true),
+			"attack": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "attack_sheet.png", 3, 3, 8, 0.1, false, _knight_attack_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.1, false, _knight_skill2_anchors()),
 			"ult": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "ult/", "knight_ult_f_", _ult_frame_specs(), false),
 		},
 		"dex": {
@@ -189,6 +191,32 @@ static func _ult_frame_specs() -> Array:
 		specs.append({"index": i, "duration": dur})
 	return specs
 
+## 攻击动画锚点：把扫描生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _knight_attack_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_FOOT[i],
+			"head_gap": KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_HEAD[i],
+			"center_dx": KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_CENTER[i],
+			"content_w": KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_CONTENT_W[i],
+			"content_h": KNIGHT_FOOT_GAPS.KNIGHT_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## 技能2动画锚点：同 _knight_attack_anchors 写法，常量来自 knight_skill2_foot_gaps.gd
+static func _knight_skill2_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_FOOT[i],
+			"head_gap": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_HEAD[i],
+			"center_dx": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CENTER[i],
+			"content_w": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_W[i],
+			"content_h": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
 ## 输入处理
 static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	var mx = 0
@@ -302,6 +330,11 @@ static func _fire_enhanced_rending(owner: Fighter, comp: KnightComponent):
 
 ## 每帧更新：招架计时 + 增益/减益管理
 static func update_systems(owner: Fighter):
+	# 动画帧推进：循环动画（walk/idle）需要每帧 update 才能换帧；
+	# 非循环动画（attack/ult）播放中同样推进，播完后由状态机切回 idle。
+	if owner.current_anim and owner.current_anim.is_playing():
+		owner.current_anim.update(1.0)
+
 	var comp: KnightComponent = owner.components.get_component("knight") if owner.components else null
 	if not comp:
 		return

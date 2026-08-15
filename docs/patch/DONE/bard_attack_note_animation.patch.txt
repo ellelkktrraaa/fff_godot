@@ -1,0 +1,21 @@
+# ===== [bard.gd] 新增 attack_note（音符合奏）动画建议 =====
+# 供人工审阅后粘贴到 scripts/characters/bard.gd
+
+## 1) const 区新增角色级锚点 preload（建议加在 BARD_ATTACK_FOOT_GAPS 附近）：
+const BARD_FOOT_GAPS = preload("res://data/foot_gaps/bard_attack_note_foot_gaps.gd")
+
+## 2) animations 字典新增 "attack_note"（建议加在 "attack" 之后）：
+"attack_note": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack_note/sheet.png", 3, 2, 6, 0.1, false, _bard_attack_note_anchors()),
+
+## 3) 新增锚点辅助函数（参考 _bard_attack_anchors()）：
+static func _bard_attack_note_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_FOOT_GAPS.BARD_ATTACK_NOTE_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_FOOT_GAPS.BARD_ATTACK_NOTE_FOOT[i],
+			"head_gap": BARD_FOOT_GAPS.BARD_ATTACK_NOTE_HEAD[i],
+			"center_dx": BARD_FOOT_GAPS.BARD_ATTACK_NOTE_CENTER[i],
+			"content_w": BARD_FOOT_GAPS.BARD_ATTACK_NOTE_CONTENT_W[i],
+			"content_h": BARD_FOOT_GAPS.BARD_ATTACK_NOTE_CONTENT_H[i],
+		})
+	return anchors

@@ -1,0 +1,23 @@
+# 建议改动：scripts/characters/knight.gd（供人工审阅后粘贴）
+# 将 skill2 从旧的单帧占位动画替换为 sprite sheet 六帧动画。
+# 注意：knight.gd 已有 const KNIGHT_FOOT_GAPS 指向 knight_attack_foot_gaps.gd，
+# 为避免常量重名，本次新增使用状态级常量名 KNIGHT_SKILL2_FOOT_GAPS。
+
+# 1) const 区新增 preload
+const KNIGHT_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/knight_skill2_foot_gaps.gd")
+
+# 2) animations 字典里 "skill2": ... 一行替换为：
+"skill2": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.1, false, _knight_skill2_anchors()),
+
+# 3) 锚点辅助函数（参照 _knight_attack_anchors 写法）
+static func _knight_skill2_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_FOOT[i],
+			"head_gap": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_HEAD[i],
+			"center_dx": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CENTER[i],
+			"content_w": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_W[i],
+			"content_h": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_H[i],
+		})
+	return anchors

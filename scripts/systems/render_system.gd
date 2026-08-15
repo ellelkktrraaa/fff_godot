@@ -1,5 +1,8 @@
 class_name RenderSystem
 
+## 调试：按 F2 切换是否绘制碰撞体边框（默认关闭）
+static var debug_draw_hitboxes: bool = true
+
 const SHIELD_IMG = preload("res://assets/fx_shield.png")
 const FLAME_IMG = preload("res://assets/fx_flame.png")
 
@@ -172,6 +175,8 @@ static func draw_frame(game_node: CanvasItem):
 	# 13. 减速滤镜
 	var dodge_slow = false
 	for f in GameWorld.entities:
+		if not is_instance_valid(f):
+			continue
 		if f.state_flags.get("dodge_slow", 0) > 0:
 			dodge_slow = true
 			break
@@ -262,8 +267,8 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 		alpha_mod = 0.5
 
 	var tex: Texture2D = f.state_flags.get("draw_texture_override") if f.state_flags.has("draw_texture_override") else null
+	var anim: FrameAnimation = f.current_anim
 	if not tex:
-		var anim: FrameAnimation = f.current_anim
 		if anim:
 			tex = anim.get_current_texture()
 	if not tex:
@@ -282,10 +287,36 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 		# draw_texture_override 贴图可叠加独立缩放系数
 		if f.state_flags.has("draw_texture_override"):
 			img_scale *= f.state_flags.get("draw_texture_override_scale", 1.0)
+
+		# 默认：整帧缩放 + 居中 + 帧底对齐（兼容无锚点的旧贴图）
 		var scale = minf(f.w / tw, f.h / th) * img_scale
 		tw *= scale; th *= scale
 		var tx = px + (f.w - tw) / 2.0
 		var ty = py + f.h - th + f.config.get("image_offset_y", 0.0)
+
+		# 锚点对齐：当前动画帧带锚点数据时，按 内容中轴/脚底/内容高度 统一呈现
+		if anim:
+			var foot_gap: int = anim.get_current_foot_gap()
+			var head_gap: int = anim.get_current_head_gap()
+			var center_dx: float = anim.get_current_center_dx()
+			var csize: Vector2i = anim.get_current_content_size()
+			# 人工标记锚点（uniform）不含 content 尺寸（-1）：用帧尺寸减去上下空隙推算内容高度，
+			# 否则会退回旧整帧缩放，把 768×1344 整格压进碰撞箱，角色小到盖不住碰撞体。
+			var content_h: float = csize.y
+			if (csize.x <= 0 or csize.y <= 0) and tex is AtlasTexture:
+				content_h = tex.get_height() - foot_gap - head_gap
+			if content_h > 0:
+				# 锚点对齐：统一身高 = 内容实际高度(content_h) → 碰撞体高度(f.h)。
+				# 注意：不再乘 img_scale —— 那是无锚点旧贴图时代的整帧手调系数，
+				# 锚点数据已包含内容真实尺寸，再乘 img_scale 会双重缩放导致大小不对。
+				scale = f.h / float(content_h)
+				tw = tex.get_width() * scale
+				th = tex.get_height() * scale
+				# 内容中轴对齐碰撞体中心（减去内容相对帧中心线的水平偏移）
+				tx = px + f.w / 2.0 - tw / 2.0 - center_dx * scale
+				# 脚底对齐碰撞体底部（图片底边比脚底低 foot_gap，需下移）
+				ty = py + f.h - th + foot_gap * scale + f.config.get("image_offset_y", 0.0)
+
 		if f.facing < 0:
 			game_node.draw_set_transform(Vector2(tx + tw, ty), 0.0, Vector2(-1, 1))
 			game_node.draw_texture_rect(tex, Rect2(0, 0, tw, th), false, Color(1, 1, 1, alpha_mod))
@@ -327,6 +358,11 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 	var hp_pct = f.hp / maxf(f.max_hp, 1.0)
 	game_node.draw_rect(Rect2(px, py - 8, f.w, 4), Color(0.2, 0.2, 0.2))
 	game_node.draw_rect(Rect2(px, py - 8, f.w * hp_pct, 4), Color(0.27, 0.67, 0.27))
+
+	# 调试：碰撞体边框（F2 切换）。黄框=碰撞体；角色帧描边单独画在身体纹理上
+	if debug_draw_hitboxes:
+		var hb: Rect2 = f.get_hit_box()
+		game_node.draw_rect(Rect2(hb.position.x - cam_x, hb.position.y - cam_y, hb.size.x, hb.size.y), Color(1, 1, 0), false, 1.5)
 
 	var lbl = "P1" if f.is_player else ("P2" if is_local else "AI")
 	var lbl_color = Color.WHITE if f.is_player else (Color(0.0, 0.667, 1.0) if is_local else Color.RED)

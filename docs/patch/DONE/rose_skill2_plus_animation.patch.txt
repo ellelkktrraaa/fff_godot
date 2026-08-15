@@ -1,0 +1,28 @@
+# rose.gd 动画接入建议：skill2_plus
+# 请人工审阅后粘贴到 scripts/characters/rose.gd，分三处修改：
+#
+# ── 1) const 区新增 preload（建议放在 ROSE_JUMP_FOOT_GAPS 附近）──
+# const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_plus_foot_gaps.gd")
+#
+# ── 2) get_config() 的 animations 字典新增一行（建议加在 "skill2_enhanced" 之后）──
+# "skill2_plus": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2_plus/sheet.png", 4, 3, 11, 0.1, false, _rose_skill2_plus_anchors()),
+#
+# ── 3) 新增锚点辅助函数（写法同 _rose_idle_anchors / _rose_jump_anchors）──
+# static func _rose_skill2_plus_anchors() -> Array:
+# 	var anchors: Array = []
+# 	for i in range(ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_FOOT.size()):
+# 		anchors.append({
+# 			"foot_gap": ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_FOOT[i],
+# 			"head_gap": ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_HEAD[i],
+# 			"center_dx": ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_CENTER[i],
+# 			"content_w": ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_CONTENT_W[i],
+# 			"content_h": ROSE_FOOT_GAPS.ROSE_SKILL2_PLUS_CONTENT_H[i],
+# 		})
+# 	return anchors
+#
+# 说明：
+# - duration=0.1 取自 sheet.json duration_ms=100；11 帧总时长 1.1s。
+#   该状态为技能类动画（参考 skill1/skill2_enhanced 均为 2~3s），不受 attack_duration(30帧=0.5s) 限制；
+#   若实际播放窗口很短（如 0.5s 内被切走），请调小 duration（例如 0.04 → 总时长 0.44s）。
+# - 人工标记锚点仅含 foot_gap/head_gap/center_dx，CONTENT_W/CONTENT_H 为 -1 属预期，
+#   渲染端以 foot_gap/head_gap 对齐为准。

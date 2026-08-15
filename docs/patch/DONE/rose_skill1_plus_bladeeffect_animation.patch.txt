@@ -1,0 +1,20 @@
+# rose.gd 改动建议：新增 skill1_plus_bladeeffect 动画（11 帧 sprite-sheet，4x3 网格，768x1344/帧，0.1s/帧）
+#
+# 1) const 区新增 preload（放在 ROSE_JUMP_FOOT_GAPS 之后）：
+const ROSE_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill1_plus_bladeeffect_foot_gaps.gd")
+
+# 2) get_config() 的 animations 字典新增一行（建议放在 "skill1" 之后）：
+"skill1_plus_bladeeffect": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet.png", 4, 3, 11, 0.1, false, _rose_skill1_plus_bladeeffect_anchors()),
+
+# 3) 新增锚点辅助函数（参考 _rose_idle_anchors 写法）：
+static func _rose_skill1_plus_bladeeffect_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT[i],
+			"head_gap": ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_HEAD[i],
+			"center_dx": ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CENTER[i],
+			"content_w": ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CONTENT_W[i],
+			"content_h": ROSE_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CONTENT_H[i],
+		})
+	return anchors

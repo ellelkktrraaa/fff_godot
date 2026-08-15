@@ -106,7 +106,10 @@ static func pick_random() -> String:
 	return candidates[randi() % candidates.size()]
 
 ## 地图是否锁定（玩家不可选择，界面展示"开发中"）
+## 作弊模式开启时全部解锁
 static func is_locked(map_path: String) -> bool:
+	if GameWorld.infinite_energy:
+		return false
 	var p: String = map_path.to_lower()
 	for kw in _locked_map_keywords:
 		if kw in p:

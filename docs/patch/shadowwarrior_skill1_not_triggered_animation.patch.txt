@@ -1,0 +1,20 @@
+=== scripts/characters/shadowwarrior.gd 改动建议（新增 skill1_not_triggered 动画） ===
+
+1) const 区新增 preload（与其它 FOOT_GAPS preload 放一起）：
+   const SHADOWWARRIOR_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_skill1_not_triggered_foot_gaps.gd")
+
+2) get_config() 的 animations 字典内新增一行（建议放在 ult 之前）：
+   "skill1_not_triggered": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "skill1_not_triggered/sheet.png", 4, 3, 12, 0.1, false, _shadowwarrior_skill1_not_triggered_anchors()),
+
+3) 新增锚点辅助函数（与其它 _anchors 函数放一起，写法同 _shadowwarrior_attack_anchors）：
+   static func _shadowwarrior_skill1_not_triggered_anchors() -> Array:
+   	var anchors: Array = []
+   	for i in range(SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT.size()):
+   		anchors.append({
+   			"foot_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT[i],
+   			"head_gap": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_HEAD[i],
+   			"center_dx": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CENTER[i],
+   			"content_w": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CONTENT_W[i],
+   			"content_h": SHADOWWARRIOR_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CONTENT_H[i],
+   		})
+   	return anchors

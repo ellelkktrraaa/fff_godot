@@ -1,0 +1,4 @@
+# 临时文件（待人工清理）—— bard jump 配置确认提示
+1. 本文件为过程临时载体，请删除。
+2. jump 动画 patch 中 duration/loop 沿用旧配置 999.0/true；导出为 5 帧跳跃动画（sheet duration_ms=100），建议改为 0.1/false。
+3. patch 文本（docs/patch/bard_jump_animation.patch.txt）需人工审阅后粘贴进 scripts/characters/bard.gd。

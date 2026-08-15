@@ -3,6 +3,11 @@ class_name BardCharacter
 
 const BARD_ANI_DIR = "res://assets/char_ani/bard/"
 const NOTES_DIR = "res://assets/char_ani/bard/Notes/"
+const BARD_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/bard_attack_foot_gaps.gd")
+const BARD_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/bard_idle_foot_gaps.gd")
+const BARD_WALK_FOOT_GAPS = preload("res://data/foot_gaps/bard_walk_foot_gaps.gd")
+const BARD_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/bard_jump_foot_gaps.gd")
+const BARD_ATTACK_NOTE_FOOT_GAPS = preload("res://data/foot_gaps/bard_attack_note_foot_gaps.gd")
 
 # 技能1：我含泪而笑 — 声波贴图
 const SKILL1_DIR = "res://assets/char_ani/bard/skill1/"
@@ -88,14 +93,11 @@ static func get_config() -> Dictionary:
 		"image_scale": 1.2,
 		"fields": {}, "world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(BARD_ANI_DIR + "idle/", "bard_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(BARD_ANI_DIR + "walk/", "bard_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(BARD_ANI_DIR + "jump/", "bard_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(BARD_ANI_DIR + "attack/", "bard_attack_f_", [
-				{"index": 1, "duration": 0.05},
-				{"index": 2, "duration": 0.05},
-				{"index": 3, "duration": 0.05},
-			], false),
+			"idle": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "idle/sheet.png", 4, 4, 14, 0.1, true, _bard_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "walk/sheet.png", 3, 3, 9, 0.1, true, _bard_walk_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(BARD_ANI_DIR + "jump/sheet.png", 3, 2, 5, 0.2, _bard_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack/sheet.png", 3, 3, 8, 0.05, false, _bard_attack_anchors()),
+			"attack_note": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack_note/sheet.png", 3, 2, 6, 0.1, false, _bard_attack_note_anchors()),
 			"skill1": FrameAnimation.load_from_frames(BARD_ANI_DIR + "attack/", "bard_attack_f_", [
 				{"index": 1, "duration": 0.5},
 				{"index": 2, "duration": 0.5},
@@ -133,6 +135,71 @@ static func create_skills() -> Array:
 		Skill.new("skill2", "月相盈亏", SKILL2_COOLDOWN, SKILL2_ENERGY_COST, Callable(), Callable(_skill2)),
 		Skill.new("ult", "胜过天上的星辰", ULT_COOLDOWN, ULT_ENERGY_COST, Callable(), Callable(_ult)),
 	]
+
+## 攻击动画锚点：把扫描生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _bard_attack_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_FOOT[i],
+			"head_gap": BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_HEAD[i],
+			"center_dx": BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_CENTER[i],
+			"content_w": BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_CONTENT_W[i],
+			"content_h": BARD_ATTACK_FOOT_GAPS.BARD_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## idle 动画锚点：同 _bard_attack_anchors 写法
+static func _bard_idle_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_IDLE_FOOT_GAPS.BARD_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_IDLE_FOOT_GAPS.BARD_IDLE_FOOT[i],
+			"head_gap": BARD_IDLE_FOOT_GAPS.BARD_IDLE_HEAD[i],
+			"center_dx": BARD_IDLE_FOOT_GAPS.BARD_IDLE_CENTER[i],
+			"content_w": BARD_IDLE_FOOT_GAPS.BARD_IDLE_CONTENT_W[i],
+			"content_h": BARD_IDLE_FOOT_GAPS.BARD_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## walk 动画锚点：同 _bard_attack_anchors 写法
+static func _bard_walk_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_WALK_FOOT_GAPS.BARD_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_WALK_FOOT_GAPS.BARD_WALK_FOOT[i],
+			"head_gap": BARD_WALK_FOOT_GAPS.BARD_WALK_HEAD[i],
+			"center_dx": BARD_WALK_FOOT_GAPS.BARD_WALK_CENTER[i],
+			"content_w": BARD_WALK_FOOT_GAPS.BARD_WALK_CONTENT_W[i],
+			"content_h": BARD_WALK_FOOT_GAPS.BARD_WALK_CONTENT_H[i],
+		})
+	return anchors
+
+## jump 动画锚点：同 _bard_attack_anchors 写法
+static func _bard_jump_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_JUMP_FOOT_GAPS.BARD_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_JUMP_FOOT_GAPS.BARD_JUMP_FOOT[i],
+			"head_gap": BARD_JUMP_FOOT_GAPS.BARD_JUMP_HEAD[i],
+			"center_dx": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CENTER[i],
+			"content_w": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CONTENT_W[i],
+			"content_h": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## attack_note 动画锚点：同 _bard_attack_anchors 写法
+static func _bard_attack_note_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_FOOT[i],
+			"head_gap": BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_HEAD[i],
+			"center_dx": BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_CENTER[i],
+			"content_w": BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_CONTENT_W[i],
+			"content_h": BARD_ATTACK_NOTE_FOOT_GAPS.BARD_ATTACK_NOTE_CONTENT_H[i],
+		})
+	return anchors
 
 static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	var comp: BardComponent = owner.components.get_component("bard") if owner.components else null

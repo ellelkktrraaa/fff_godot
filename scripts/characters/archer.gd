@@ -8,6 +8,7 @@ const PROJ_ARROW_FIRE = preload("res://assets/fx_arrow_fire.png")
 const PROJ_ARROW_ULT = preload("res://assets/fx_arrow_ult.png")
 const PROJ_ARROW_ULT_FIRE = preload("res://assets/fx_arrow_ult_fire.png")
 const ARCHER_ANI_DIR = "res://assets/char_ani/archer/"
+const ARCHER_ULT_FOOT_GAPS = preload("res://data/foot_gaps/archer_ult_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
@@ -22,7 +23,7 @@ static func get_config() -> Dictionary:
 			"walk": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "walk/", "archer_walk_f_", [{"index": 1, "duration": 999.0}], true),
 			"jump": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "jump/", "archer_jump_f_", [{"index": 1, "duration": 999.0}], true),
 			"attack": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "attack/", "archer_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"ult": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "ult/", "archer_ult_f_", [{"index": 1, "duration": 3.0}], false),
+			"ult": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "ult/sheet.png", 3, 2, 6, 3.0, false, _archer_ult_anchors()),
 			"charge": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "charge/", "archer_charge_f_", [{"index": 1, "duration": 999.0}], true),
 		},
 		"dex": {
@@ -37,6 +38,19 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## 大招动画锚点：把扫描生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _archer_ult_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_FOOT[i],
+			"head_gap": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_HEAD[i],
+			"center_dx": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CENTER[i],
+			"content_w": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CONTENT_W[i],
+			"content_h": ARCHER_ULT_FOOT_GAPS.ARCHER_ULT_CONTENT_H[i],
+		})
+	return anchors
 
 static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	var mx = 0

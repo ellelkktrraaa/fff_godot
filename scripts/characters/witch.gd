@@ -8,6 +8,8 @@ const IMG_TORNADO = preload("res://assets/fx_tornado.png")
 const IMG_VORTEX = preload("res://assets/fx_vortex.png")
 const PROJ_METEOR = preload("res://assets/fx_meteor.png")
 const WITCH_ANI_DIR = "res://assets/char_ani/witch/"
+const WITCH_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/witch_idle_foot_gaps.gd")
+const WITCH_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/witch_skill2_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	_inject_draw()
@@ -18,10 +20,11 @@ static func get_config() -> Dictionary:
 		"fields": {"is_flying":false,"fly_energy_drain":0.133,"gravity_debuff":false,"jump_reduction":1.0,"is_casting_ult":false,"cast_ult_x":0.0,"cast_ult_y":0.0},
 		"world_arrays": ["tornadoes","vortexes"],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "idle/", "witch_idle_f_", [{"index": 1, "duration": 999.0}], true),
+			"idle": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "idle/sheet.png", 5, 4, 17, 999.0, true, _witch_idle_anchors()),
 			"walk": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "walk/", "witch_walk_f_", [{"index": 1, "duration": 999.0}], true),
 			"jump": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "jump/", "witch_jump_f_", [{"index": 1, "duration": 999.0}], true),
 			"attack": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "attack/", "witch_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"skill2": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "skill2/sheet.png", 4, 3, 11, 0.1, false, _witch_skill2_anchors()),
 			"ult": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "ult/", "witch_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
 		"dex": {
@@ -36,6 +39,31 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## 锚点辅助函数：把扫描生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _witch_idle_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_FOOT[i],
+			"head_gap": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_HEAD[i],
+			"center_dx": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CENTER[i],
+			"content_w": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CONTENT_W[i],
+			"content_h": WITCH_IDLE_FOOT_GAPS.WITCH_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+static func _witch_skill2_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_FOOT[i],
+			"head_gap": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_HEAD[i],
+			"center_dx": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CENTER[i],
+			"content_w": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_W[i],
+			"content_h": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_H[i],
+		})
+	return anchors
 
 static func _can_use_skill2(owner: Fighter) -> bool:
 	var witch_comp: WitchComponent = owner.components.get_component("witch") if owner.components else null

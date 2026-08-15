@@ -5,12 +5,18 @@ const RoseComponent = preload("res://scripts/components/rose_component.gd")
 
 const ROSE_SLASH_IMG = preload("res://assets/fx_rose_slash.png")
 const ROSE_SKILL1_IMG = preload("res://assets/fx_rose_skill1.png")
-const ROSE_SKILL2_IMG = preload("res://assets/fx_rose_skill2.png")
 const ROSE_ENH_SLASH1 = preload("res://assets/fx_rose_enh_slash1.png")
 const ROSE_ENH_SLASH2 = preload("res://assets/fx_rose_enh_slash2.png")
 const ROSE_ENH_SLASH3 = preload("res://assets/fx_rose_enh_slash3.png")
 const ROSE_ENH_SLASH4 = preload("res://assets/fx_rose_enh_slash4.png")
 const ROSE_ANI_DIR = "res://assets/char_ani/rose/"
+const ROSE_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/rose_idle_foot_gaps.gd")
+const ROSE_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/rose_jump_foot_gaps.gd")
+const ROSE_WALK_FOOT_GAPS = preload("res://data/foot_gaps/rose_walk_foot_gaps.gd")
+const ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill1_plus_bladeeffect_foot_gaps.gd")
+const ROSE_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_foot_gaps.gd")
+const ROSE_SKILL2_PLUS_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_plus_foot_gaps.gd")
+const ROSE_ULT_FOOT_GAPS = preload("res://data/foot_gaps/rose_ult_foot_gaps.gd")
 
 ## 从预加载贴图创建单帧 FrameAnimation（用于角色变身等替换人物贴图的场景）
 static func _single_frame_anim(tex: Texture2D, dur: float, loop: bool = false) -> FrameAnimation:
@@ -28,17 +34,16 @@ static func get_config() -> Dictionary:
 		"fields": {},
 		"world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "idle/", "rose_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "walk/", "rose_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "jump/", "rose_jump_f_", [{"index": 1, "duration": 999.0}], true),
+			"idle": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _rose_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "walk/sheet.png", 4, 3, 10, 0.1, true, _rose_walk_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(ROSE_ANI_DIR + "jump/sheet.png", 2, 2, 4, 0.2, _rose_jump_anchors()),
 			"attack": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "attack/", "rose_attack_f_", [{"index": 1, "duration": 0.5}], false),
 			"skill1": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill1/", "rose_skill1_f_", [{"index": 1, "duration": 2.0}], false),
-			"skill2": _single_frame_anim(ROSE_SKILL2_IMG, 3.0),  # 蝙蝠形态贴图
+			"skill1_plus_bladeeffect": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet.png", 4, 3, 11, 0.1, false, _rose_skill1_plus_bladeeffect_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.08, false, _rose_skill2_anchors()),
 			"skill2_enhanced": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill2_enhanced/", "rose_skill2_enhanced_f_", [{"index": 1, "duration": 3.0}], false),
-			"ult": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "ult/", "rose_ult_f_", [
-				{"index": 1, "duration": 0.797}, {"index": 2, "duration": 0.114}, {"index": 3, "duration": 0.341},
-				{"index": 4, "duration": 0.569}, {"index": 5, "duration": 0.683}, {"index": 6, "duration": 1.0}
-			], false),
+			"skill2_plus": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2_plus/sheet.png", 4, 3, 11, 0.1, false, _rose_skill2_plus_anchors()),
+			"ult": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors()),
 			"charge": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "charge/", "rose_charge_f_", [{"index": 1, "duration": 999.0}], true),
 		},
 		"dex": {
@@ -53,6 +58,97 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## idle 动画锚点：把 GDScript 常量组装成 FrameAnimation 需要的字典数组
+static func _rose_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_FOOT[i],
+			"head_gap": ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_HEAD[i],
+			"center_dx": ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_CENTER[i],
+			"content_w": ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_CONTENT_W[i],
+			"content_h": ROSE_IDLE_FOOT_GAPS.ROSE_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## jump 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_jump_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_FOOT[i],
+			"head_gap": ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_HEAD[i],
+			"center_dx": ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_CENTER[i],
+			"content_w": ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_CONTENT_W[i],
+			"content_h": ROSE_JUMP_FOOT_GAPS.ROSE_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## walk 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_walk_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_WALK_FOOT_GAPS.ROSE_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_WALK_FOOT_GAPS.ROSE_WALK_FOOT[i],
+			"head_gap": ROSE_WALK_FOOT_GAPS.ROSE_WALK_HEAD[i],
+			"center_dx": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CENTER[i],
+			"content_w": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CONTENT_W[i],
+			"content_h": ROSE_WALK_FOOT_GAPS.ROSE_WALK_CONTENT_H[i],
+		})
+	return anchors
+
+## skill1_plus_bladeeffect 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_skill1_plus_bladeeffect_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT[i],
+			"head_gap": ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_HEAD[i],
+			"center_dx": ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CENTER[i],
+			"content_w": ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CONTENT_W[i],
+			"content_h": ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS.ROSE_SKILL1_PLUS_BLADEEFFECT_CONTENT_H[i],
+		})
+	return anchors
+
+## skill2 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_skill2_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_FOOT[i],
+			"head_gap": ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_HEAD[i],
+			"center_dx": ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_CENTER[i],
+			"content_w": ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_CONTENT_W[i],
+			"content_h": ROSE_SKILL2_FOOT_GAPS.ROSE_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+## skill2_plus 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_skill2_plus_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_FOOT[i],
+			"head_gap": ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_HEAD[i],
+			"center_dx": ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_CENTER[i],
+			"content_w": ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_CONTENT_W[i],
+			"content_h": ROSE_SKILL2_PLUS_FOOT_GAPS.ROSE_SKILL2_PLUS_CONTENT_H[i],
+		})
+	return anchors
+
+## ult 动画锚点：同 _rose_idle_anchors 写法
+static func _rose_ult_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_ULT_FOOT_GAPS.ROSE_ULT_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_ULT_FOOT_GAPS.ROSE_ULT_FOOT[i],
+			"head_gap": ROSE_ULT_FOOT_GAPS.ROSE_ULT_HEAD[i],
+			"center_dx": ROSE_ULT_FOOT_GAPS.ROSE_ULT_CENTER[i],
+			"content_w": ROSE_ULT_FOOT_GAPS.ROSE_ULT_CONTENT_W[i],
+			"content_h": ROSE_ULT_FOOT_GAPS.ROSE_ULT_CONTENT_H[i],
+		})
+	return anchors
 
 static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	var comp: RoseComponent = p.components.get_component("rose") if p.components else null
@@ -96,6 +192,9 @@ static func handle_input(p: Fighter, keys: Dictionary) -> int:
 
 static func update_systems(f: Fighter):
 	if f.hp <= 0: return
+	# 动画帧推进（多帧 sprite-sheet 动画需要每帧 update 才能换帧）
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
 	# ── HUD 标签注入 ──
 	f.hud_skill_labels = {"attack": "J 血刃", "skill1": "U 血之月华", "skill2": "I 夜翼瞬袭", "ult": "O 暗夜华尔兹"}
 	var comp: RoseComponent = f.components.get_component("rose") if f.components else null
@@ -409,10 +508,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 		if entry.get("overlay_id") == "rose_ult":
 			return {"success": false}
 	
-	var anim = FrameAnimation.load_from_frames(ROSE_ANI_DIR + "ult/", "rose_ult_f_", [
-		{"index": 1, "duration": 0.797}, {"index": 2, "duration": 0.114}, {"index": 3, "duration": 0.341},
-		{"index": 4, "duration": 0.569}, {"index": 5, "duration": 0.683}, {"index": 6, "duration": 1.0}
-	], false)
+	var anim = FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors())
 	if anim.frames.is_empty():
 		return {"success": false}
 	anim.play()

@@ -1,0 +1,25 @@
+# ===== bard jump 动画接入建议（供人工审阅后粘贴到 scripts/characters/bard.gd） =====
+# 新增导出: 20260812-170036-f1bd-export-bard_jump（sprite sheet, 5 帧, 3列x2行, 768x1024）
+# 注意: 本导出为人工标记锚点（uniform foot_gap=168, head_gap=180, center_dx=7.0），
+#       生成的 CONTENT_W/CONTENT_H 为 -1（旧扫描流程才有内容尺寸），渲染端以 foot/head 对齐为准。
+# 注意: 原有 jump 为单帧 load_from_frames(duration=999.0, loop=true)；
+#       改为 5 帧 sprite sheet 后建议按需调整 duration（如 0.1~0.2）以便播放完整跳跃动作，loop 沿用 true。
+
+# ---- 1) const 区新增 preload（与 BARD_ATTACK_FOOT_GAPS 并列） ----
+const BARD_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/bard_jump_foot_gaps.gd")
+
+# ---- 2) animations 字典中 "jump" 一行替换为 ----
+"jump": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "jump/sheet.png", 3, 2, 5, 999.0, true, _bard_jump_anchors()),
+
+# ---- 3) 新增锚点辅助函数（仿 _bard_attack_anchors） ----
+static func _bard_jump_anchors() -> Array:
+	var anchors := []
+	for i in range(BARD_JUMP_FOOT_GAPS.BARD_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": BARD_JUMP_FOOT_GAPS.BARD_JUMP_FOOT[i],
+			"head_gap": BARD_JUMP_FOOT_GAPS.BARD_JUMP_HEAD[i],
+			"center_dx": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CENTER[i],
+			"content_w": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CONTENT_W[i],
+			"content_h": BARD_JUMP_FOOT_GAPS.BARD_JUMP_CONTENT_H[i],
+		})
+	return anchors
