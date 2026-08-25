@@ -12,9 +12,6 @@ const SW_RETREAT       = preload("res://assets/fx_shadow_retreat.png")
 const SW_BREAK_STRIKE  = preload("res://assets/fx_shadow_break_strike.png")
 const SW_GRAB          = preload("res://assets/fx_shadow_grab.png")
 const SW_GRAB_BURST    = preload("res://assets/fx_shadow_grab_burst.png")
-const SW_IDLE_IMG      = preload("res://assets/char_ani/shadowwarrior/idle/shadowwarrior_idle_f_1.png")
-const SW_WALK_IMG      = preload("res://assets/char_ani/shadowwarrior/walk/shadowwarrior_walk_f_1.png")
-const SW_ATTACK_IMG    = preload("res://assets/char_ani/shadowwarrior/attack/shadowwarrior_attack_f_1.png")
 const SW_ULT_IMG       = preload("res://assets/char_ani/shadowwarrior/ult/shadowwarrior_ult_f_1.png")
 const SW_BREAK_SHADOW  = preload("res://assets/char_ani/shadowwarrior/break_shadow.png")
 const SW_FADE_IN_SHADOW = preload("res://assets/char_ani/shadowwarrior/fade_in_shadow.png")
@@ -23,6 +20,8 @@ const SHADOWWARRIOR_ANI_DIR = "res://assets/char_ani/shadowwarrior/"
 const SHADOWWARRIOR_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_idle_foot_gaps.gd")
 const SHADOWWARRIOR_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_jump_foot_gaps.gd")
 const SHADOWWARRIOR_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_attack_foot_gaps.gd")
+const SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_skill1_not_triggered_foot_gaps.gd")
+const SHADOWWARRIOR_WALK_FOOT_GAPS = preload("res://data/foot_gaps/shadowwarrior_walk_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
@@ -31,11 +30,14 @@ static func get_config() -> Dictionary:
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
 		"fields": {"stealth_active":false,"stealth_timer":0,"last_skill_time":-999,"retreat_timer":0,"retreat_dir":1,"break_strike_timer":0,"pending_trap":false,"shadow_trap_active":false,"shadow_trap":{},"pending_clones":false,"clone_reveal_timer":0,"iaido_active":false,"iaido_timer":0,"iaido_frozen":false,"iaido_dir":1,"iaido_slash":{}},
 		"world_arrays": ["phantoms"],
+		"anim_scale_states": {"skill2": 1.8},  # 二技能释放动画放大 1.8 倍，完全遮住碰撞盒
 		"animations": {
 			"idle": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "idle/sheet.png", 3, 3, 8, 0.1, true, _shadowwarrior_idle_anchors()),
-			"walk": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "walk/", "shadowwarrior_walk_f_", [{"index": 1, "duration": 999.0}], true),
+			"walk": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "walk/sheet.png", 4, 4, 14, 0.1, true, _shadowwarrior_walk_anchors()),
 			"jump": FrameAnimation.load_jump_sheet(SHADOWWARRIOR_ANI_DIR + "jump/sheet.png", 3, 2, 4, 0.2, _shadowwarrior_jump_anchors()),
-			"attack": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _shadowwarrior_attack_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "attack/sheet.png", 4, 3, 8, 0.05, false, _shadowwarrior_attack_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "skill2/sheet.png", 2, 2, 3, 0.2, false, _shadowwarrior_skill2_anchors()),
+			"skill1_not_triggered": FrameAnimation.load_from_sprite_sheet(SHADOWWARRIOR_ANI_DIR + "skill1_not_triggered/sheet.png", 4, 3, 12, 0.1, false, _shadowwarrior_skill1_not_triggered_anchors()),
 			"ult": FrameAnimation.load_from_frames(SHADOWWARRIOR_ANI_DIR + "ult/", "shadowwarrior_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
 		"dex": {
@@ -78,6 +80,19 @@ static func _shadowwarrior_jump_anchors() -> Array:
 		})
 	return anchors
 
+## walk 动画锚点：同 _shadowwarrior_idle_anchors 写法（14 帧，格 1024x768）
+static func _shadowwarrior_walk_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_FOOT[i],
+			"head_gap": SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_HEAD[i],
+			"center_dx": SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_CENTER[i],
+			"content_w": SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_WALK_FOOT_GAPS.SHADOWWARRIOR_WALK_CONTENT_H[i],
+		})
+	return anchors
+
 ## attack 动画锚点：同 _shadowwarrior_idle_anchors 写法
 static func _shadowwarrior_attack_anchors() -> Array:
 	var anchors: Array = []
@@ -88,6 +103,37 @@ static func _shadowwarrior_attack_anchors() -> Array:
 			"center_dx": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CENTER[i],
 			"content_w": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CONTENT_W[i],
 			"content_h": SHADOWWARRIOR_ATTACK_FOOT_GAPS.SHADOWWARRIOR_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## skill2（二技能·幻影舞释放）动画锚点：3 帧 768x768（PIL 实测，帧 0~2）
+static func _shadowwarrior_skill2_anchors() -> Array:
+	var foot: Array[int] = [32, 32, 32]
+	var head: Array[int] = [44, 44, 44]
+	var center: Array[float] = [39.5, -12.5, 2.0]
+	var cw: Array[int] = [526, 678, 747]
+	var ch: Array[int] = [692, 692, 692]
+	var anchors: Array = []
+	for i in range(foot.size()):
+		anchors.append({
+			"foot_gap": foot[i],
+			"head_gap": head[i],
+			"center_dx": center[i],
+			"content_w": cw[i],
+			"content_h": ch[i],
+		})
+	return anchors
+
+## skill1_not_triggered 动画锚点：同 _shadowwarrior_attack_anchors 写法
+static func _shadowwarrior_skill1_not_triggered_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT.size()):
+		anchors.append({
+			"foot_gap": SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT[i],
+			"head_gap": SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_HEAD[i],
+			"center_dx": SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CENTER[i],
+			"content_w": SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CONTENT_W[i],
+			"content_h": SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_FOOT_GAPS.SHADOWWARRIOR_SKILL1_NOT_TRIGGERED_CONTENT_H[i],
 		})
 	return anchors
 
@@ -129,6 +175,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	if comp:
 		comp.pending_clones = true
 		comp.last_skill_time = GameWorld.frame
+	owner.set_animation_state("skill2")  # 二技能释放动画：播放一次，播完由 update_systems 回 idle
 	Fighter.emit_particles(owner.pos_x+owner.w/2, owner.pos_y+owner.h/2, 30, Color(0.53,0.27,0.8), 5, 7, "star")
 	return {"success": true}
 
@@ -167,6 +214,9 @@ static func update_systems(f: Fighter):
 	# 动画帧推进（多帧 sprite-sheet 动画需要每帧 update 才能换帧）
 	if f.current_anim and f.current_anim.is_playing():
 		f.current_anim.update(1.0)
+	# 二技能释放动画（非循环）播完自动回到普通状态
+	if f.image_state == "skill2" and f.current_anim and f.current_anim.is_finished():
+		f.set_animation_state("idle")
 	# ── 绘制注入（每帧更新）──
 	_inject_draw(f, comp)
 	# ── 冲刺伤害覆盖：破影一击 10 点 ──
@@ -185,6 +235,9 @@ static func update_systems(f: Fighter):
 	if comp.pending_trap:
 		comp.pending_trap = false
 		comp.shadow_trap_active = true
+		# 陷阱贴图 = skill1_not_triggered 动画（未触发形态，循环播放）
+		var trap_anim = _sw_new_anim(f.config.get("animations", {}).get("skill1_not_triggered"), true)
+		trap_anim.play()
 		comp.shadow_trap = {
 			"x": f.pos_x,
 			"y": f.pos_y,
@@ -193,6 +246,7 @@ static func update_systems(f: Fighter):
 			"phase": "idle",
 			"timer": 300,  # 5 秒存在时间
 			"anim": 0,
+			"anim_obj": trap_anim,
 			"captured": null,
 			"vy": f.vy,
 			"grounded": f.grounded,
@@ -202,8 +256,12 @@ static func update_systems(f: Fighter):
 	if comp.pending_clones:
 		comp.pending_clones = false
 		var opp = GameWorld.get_opponent(f)
+		var walk_anim: FrameAnimation = f.config.get("animations", {}).get("walk")
 		for i in range(2):
 			var offset_x = (i - 0.5) * 30
+			# 分身动画：与本体同 sheet 同锚点（克隆实例独立播放）
+			var ph_anim = _sw_new_anim(walk_anim, true)
+			ph_anim.play()
 			var ph = {
 				"x": f.pos_x + offset_x,
 				"y": f.pos_y,
@@ -214,6 +272,8 @@ static func update_systems(f: Fighter):
 				"life": 300,  # 5秒存活
 				"facing": f.facing,
 				"image_state": "walk",
+				"anim": ph_anim,
+				"anim_key": "walk",
 				"attack_cooldown": 0,
 				"attack_timer": 0,
 				"attack_delay": 0,
@@ -240,6 +300,10 @@ static func _update_shadow_trap(f: Fighter, comp: ShadowwarriorComponent):
 	var trap = comp.shadow_trap
 	trap["anim"] += 1
 	trap["timer"] -= 1
+	# 陷阱动画帧推进（未触发形态 = skill1_not_triggered 循环动画）
+	var tanim: FrameAnimation = trap.get("anim_obj")
+	if tanim and tanim.is_playing():
+		tanim.update(1.0)
 	
 	# 重力 & 落地（空中释放的陷阱自动下落）
 	if not trap.get("grounded", true):
@@ -261,7 +325,8 @@ static func _update_shadow_trap(f: Fighter, comp: ShadowwarriorComponent):
 					trap["phase"] = "capture"
 					trap["timer"] = 60  # 包裹持续 1 秒
 					trap["captured"] = opp
-					Fighter.apply_damage(opp, 5.0, f)
+					# 抓取：打断除金刚体外一切技能
+					Fighter.apply_damage(opp, 5.0, f, false, Color(0.53, 0.27, 0.8), "hit_enemy", "grab")
 		"capture":
 			var cap = trap["captured"]
 			if cap and cap.hp > 0:
@@ -270,8 +335,9 @@ static func _update_shadow_trap(f: Fighter, comp: ShadowwarriorComponent):
 			if trap["timer"] <= 0:
 				trap["phase"] = "burst"
 				trap["timer"] = 20  # 爆炸动画 0.33 秒
+				GameWorld.trigger_shake(6.0, 10)  # 抓取结束瞬间屏幕微微震动
 				if cap and cap.hp > 0:
-					Fighter.apply_damage(cap, 10.0, f)
+					Fighter.apply_damage(cap, 10.0, f, false, Color(0.53, 0.27, 0.8), "hit_enemy", "", 0, 1)  # 陷阱爆炸 = 技能体攻击
 					cap.vx = (1 if cap.pos_x > trap["x"] else -1) * 5
 					cap.vy = -4
 				Fighter.emit_particles(trap["x"] + trap["w"] / 2.0, trap["y"] + trap["h"] / 2.0, 30, Color(0.4, 0.2, 0.67), 6, 8, "star", 0.8)
@@ -301,6 +367,20 @@ static func _update_phantoms(f: Fighter):
 			if ph["life"] <= 0:
 				to_remove.append(ph)
 				continue
+		# 分身动画同步（状态切换时换动画源）与帧推进
+		var panim: FrameAnimation = ph.get("anim")
+		if panim:
+			if ph.get("anim_key") != ph["image_state"]:
+				var src: FrameAnimation = f.config.get("animations", {}).get(ph["image_state"])
+				if src:
+					panim.frames = src.frames.duplicate()
+					panim.loop = src.loop
+					panim.total_duration = src.total_duration
+					panim.content_h_ref = src.content_h_ref
+					ph["anim_key"] = ph["image_state"]
+					panim.play()
+			if panim.is_playing():
+				panim.update(1.0)
 		# 重力 & 落地（空中释放/走出平台边缘的分身自动下落）
 		if not ph.get("grounded", true):
 			ph["vy"] += 0.22  # 与角色重力一致
@@ -362,7 +442,7 @@ static func _update_phantoms(f: Fighter):
 						if opp and opp.hp > 0:
 							var box = Rect2(ph["x"] + (4 if ph["facing"] > 0 else -40), ph["y"] + 4, 44, ph["h"] - 8)
 							if box.intersects(opp.get_hit_box()):
-								Fighter.apply_damage(opp, 5.0, f)
+								Fighter.apply_damage(opp, 5.0, f, true, Color(1.0, 0.53, 0.27), "hit_enemy", "", 0, 0)  # 分身普攻 = 普攻体攻击
 				if ph["attack_timer"] <= 0:
 					ph["attacking"] = false
 					ph["image_state"] = "idle"
@@ -409,6 +489,115 @@ static func _update_iaido(f: Fighter, comp: ShadowwarriorComponent):
 		var end_x = slash.get("start_x", f.pos_x) + slash["dir"] * slash["w"]
 		f.pos_x = clampf(end_x, 10, 2390 - f.w)
 
+# ── 特效贴图统一尺寸：与待机动画一致（内容高 → 碰撞体高 f.h）──
+static var _sw_fx_bbox_cache: Dictionary = {}
+
+## 贴图内容包围盒尺寸（alpha 非透明区，运行时测量一次并缓存）。
+## 待机动画基准：768 格 内容高 678 → 渲染 56px（f.h）；所有特效贴图按各自内容高等比换算。
+static func _sw_fx_bbox(img: Texture2D) -> Vector2i:
+	if img == null:
+		return Vector2i.ZERO
+	if _sw_fx_bbox_cache.has(img):
+		return _sw_fx_bbox_cache[img]
+	var size := Vector2i.ZERO
+	var im: Image = img.get_image()
+	if im:
+		size = im.get_used_rect().size
+	_sw_fx_bbox_cache[img] = size
+	return size
+
+## 按待机基准计算特效贴图的渲染尺寸：内容高 → f.h，宽按内容等比
+static func _sw_unified_size(img: Texture2D, f: Fighter) -> Vector2:
+	var b = _sw_fx_bbox(img)
+	if b.y <= 0:
+		return Vector2(f.w, f.h)
+	var sc = f.h / float(b.y)
+	return Vector2(b.x * sc, f.h)
+
+## override 贴图（破影一击/后撤）的独立缩放：与普通动画一致——内容包围盒渲染为 f.h（动画大小）。
+## render_system 锚点路径下 scale = f.h/ref_h × override_scale，故 override_scale = ref_h/内容包围盒高度。
+## 不再按"身体长度"缩放：斜向冲刺姿态按包围盒高度缩放会把身体拉得过大，且旧身体常量测量有误
+## 导致贴图偏小（后撤 100% 偏小、破影一击时大时小），统一改为包围盒 → f.h 与动画同尺寸。
+static func _sw_override_scale(f: Fighter, img: Texture2D) -> float:
+	var ref_h = _sw_current_ref_h(f)
+	if ref_h <= 0:
+		return 1.0
+	var b = _sw_fx_bbox(img)
+	if b.y <= 0:
+		return 1.0
+	return ref_h / float(b.y)
+
+## 当前动画的参考内容高度（与 render_system 的 ref_h 推导一致）
+static func _sw_current_ref_h(f: Fighter) -> float:
+	var anim: FrameAnimation = f.current_anim
+	if not anim:
+		return 0.0
+	if anim.content_h_ref > 0:
+		return float(anim.content_h_ref)
+	var csize: Vector2i = anim.get_current_content_size()
+	var ch: float = csize.y
+	if ch <= 0:
+		var tex: Texture2D = anim.get_current_texture()
+		if tex is AtlasTexture:
+			ch = tex.get_height() - anim.get_current_foot_gap() - anim.get_current_head_gap()
+	return ch
+
+## 克隆一个 FrameAnimation 实例（共享帧数据，独立播放进度），用于分身/陷阱实体
+static func _sw_new_anim(src: FrameAnimation, loop: bool) -> FrameAnimation:
+	var a := FrameAnimation.new()
+	a.frames = src.frames.duplicate()
+	a.loop = loop
+	a.total_duration = src.total_duration
+	a.content_h_ref = src.content_h_ref
+	a.jump_sheet = src.jump_sheet
+	return a
+
+## 实体级锚点渲染（分身/陷阱）：与 render_system 的角色锚点路径同一套数学。
+## 把实体碰撞盒 (x,y,w,h) 当作角色盒，动画帧内容统一缩放到 h 高。
+static func _sw_anchor_draw(tex: Texture2D, anim: FrameAnimation, x: float, y: float, w: float, h: float, cam_x: float, cam_y: float, facing: int = 1, alpha: float = 1.0) -> Array:
+	if not tex or not anim:
+		return []
+	var foot: int = anim.get_current_foot_gap()
+	var head: int = anim.get_current_head_gap()
+	var cdx: float = anim.get_current_center_dx()
+	var csize: Vector2i = anim.get_current_content_size()
+	var content_h: float = csize.y
+	if content_h <= 0 and tex is AtlasTexture:
+		content_h = tex.get_height() - foot - head
+	var ref_h: float = anim.content_h_ref if anim.content_h_ref > 0 else content_h
+	if ref_h <= 0:
+		return []
+	var scale = h / float(ref_h)
+	var tw = tex.get_width() * scale
+	var th = tex.get_height() * scale
+	var px = x - cam_x
+	var tx = px + w / 2.0 - tw / 2.0 - cdx * scale
+	var ty = y - cam_y + h - th + foot * scale
+	var sc = Vector2(-1 if facing < 0 else 1, 1)
+	return [
+		{"type": "set_transform", "pos": Vector2(tx + tw / 2.0, ty + th / 2.0), "scale": sc},
+		{"type": "tex", "tex": tex, "rect": Rect2(-tw / 2.0, -th / 2.0, tw, th), "color": Color(1, 1, 1, alpha)},
+		{"type": "reset_transform"},
+	]
+
+## 当前动画帧在目标高度 h 下的渲染宽度（用于实体血条水平居中）
+static func _sw_draw_w(anim: FrameAnimation, h: float) -> float:
+	if not anim:
+		return 0.0
+	var tex: Texture2D = anim.get_current_texture()
+	if not tex:
+		return 0.0
+	var foot: int = anim.get_current_foot_gap()
+	var head: int = anim.get_current_head_gap()
+	var csize: Vector2i = anim.get_current_content_size()
+	var content_h: float = csize.y
+	if content_h <= 0 and tex is AtlasTexture:
+		content_h = tex.get_height() - foot - head
+	var ref_h: float = anim.content_h_ref if anim.content_h_ref > 0 else content_h
+	if ref_h <= 0:
+		return 0.0
+	return tex.get_width() * h / float(ref_h)
+
 # ── 绘制注入 ──
 static var _draw_registered := false
 static func _inject_draw(f: Fighter, comp: ShadowwarriorComponent):
@@ -424,10 +613,16 @@ static func _inject_draw(f: Fighter, comp: ShadowwarriorComponent):
 		f.state_flags.erase("draw_alpha_mod")
 	if comp.stealth_active and f.dashing:
 		f.state_flags["draw_texture_override"] = SW_FADE_IN_SHADOW
+		f.state_flags["draw_texture_override_scale"] = _sw_override_scale(f, SW_FADE_IN_SHADOW)
+		f.state_flags["draw_texture_override_offset_y"] = 30.0  # 后撤贴图整体下移 30px
 	elif comp.break_strike_timer > 0:
 		f.state_flags["draw_texture_override"] = SW_BREAK_SHADOW
+		f.state_flags["draw_texture_override_scale"] = _sw_override_scale(f, SW_BREAK_SHADOW)
+		f.state_flags["draw_texture_override_offset_y"] = 0.0
 	else:
 		f.state_flags.erase("draw_texture_override")
+		f.state_flags.erase("draw_texture_override_scale")
+		f.state_flags.erase("draw_texture_override_offset_y")
 	# 世界级绘制：替身陷阱 + 居合刀光
 	GameWorld.register_draw_effect(fid + "_sw", func(font, cam_x, _cam_y = 0.0):
 		var items: Array = []
@@ -436,12 +631,20 @@ static func _inject_draw(f: Fighter, comp: ShadowwarriorComponent):
 			var trap = comp.shadow_trap
 			match trap["phase"]:
 				"idle":
-					var img = SW_TRAP_A if (trap["anim"] / 30) % 2 == 0 else SW_TRAP_B
-					items += _sw_draw_items(img, trap["x"], trap["y"]+f.h*0.4 - _cam_y, f.w, f.h*0.6, cam_x, f.facing, 0.7)
+					var tanim: FrameAnimation = trap.get("anim_obj")
+					var tex: Texture2D = tanim.get_current_texture() if tanim else null
+					if tex:
+						# 陷阱 = skill1_not_triggered 动画，锚点渲染统一到待机大小
+						items += _sw_anchor_draw(tex, tanim, trap["x"], trap["y"], trap["w"], trap["h"], cam_x, _cam_y, f.facing, 0.7)
+					else:
+						var img = SW_TRAP_A if (trap["anim"] / 30) % 2 == 0 else SW_TRAP_B
+						var ts = _sw_unified_size(img, f)
+						items += _sw_draw_items(img, trap["x"] + (trap["w"] - ts.x) / 2.0, trap["y"] + trap["h"] - ts.y - _cam_y, ts.x, ts.y, cam_x, f.facing, 0.7)
 				"capture":
 					if trap["captured"] and trap["captured"] is Fighter and trap["captured"].hp > 0:
 						var cap = trap["captured"]
-						items += _sw_draw_items(SW_GRAB, cap.pos_x - 10, cap.pos_y - 10 - _cam_y, cap.w + 20, cap.h + 20, cam_x, 1, 0.95)
+						var gs = _sw_unified_size(SW_GRAB, f)
+						items += _sw_draw_items(SW_GRAB, cap.pos_x + (cap.w - gs.x) / 2.0, cap.pos_y + cap.h - gs.y - _cam_y, gs.x, gs.y, cam_x, 1, 0.95)
 				"burst":
 					var cap = trap["captured"]
 					var bx = cap.pos_x - 10 if (cap and cap is Fighter) else trap["x"] - 10
@@ -461,9 +664,9 @@ static func _inject_draw(f: Fighter, comp: ShadowwarriorComponent):
 			var start_x: float = slash.get("start_x", f.pos_x)
 			var end_x = start_x + slash["dir"] * slash["w"]
 			var pose_x = start_x + (end_x - start_x) * progress
-			var iw = SW_ULT_IMG.get_width(); var ih = SW_ULT_IMG.get_height()
-			var s = minf(f.w / iw, f.h / ih)
-			items += _sw_draw_items(SW_ULT_IMG, pose_x + (f.w - iw*s) / 2.0, f.pos_y + f.h - ih*s*1.5 - _cam_y, iw*s, ih*s*1.5, cam_x, f.facing, 1.0)
+			var us = _sw_unified_size(SW_ULT_IMG, f)
+			# 大招姿态贴图按待机大小渲染：水平居中、脚底对齐角色底部
+			items += _sw_draw_items(SW_ULT_IMG, pose_x + (f.w - us.x) / 2.0, f.pos_y + f.h - us.y - _cam_y, us.x, us.y, cam_x, f.facing, 1.0)
 		return items
 	, 5)
 	# 分身绘制
@@ -471,21 +674,15 @@ static func _inject_draw(f: Fighter, comp: ShadowwarriorComponent):
 		var items: Array = []
 		for ph in GameWorld.phantoms:
 			if ph.get("hp", 0) <= 0: continue
-			var state = ph.get("image_state", "idle")
-			var img: Texture2D = SW_IDLE_IMG
-			match state:
-				"attack": img = SW_ATTACK_IMG
-				"walk":   img = SW_WALK_IMG
-			var px = ph["x"] - cam_x
-			if px < -ph["w"] or px > Constants.W + ph["w"]: continue
-			var py = ph["y"] + ph["h"] * 0.5 - _cam_y
-			var dh = ph["h"] * 0.6
-			if ph["facing"] < 0:
-				items.append({"type": "set_transform", "pos": Vector2(px + ph["w"], py), "scale": Vector2(-1, 1)})
-				items.append({"type": "tex", "tex": img, "rect": Rect2(0, 0, ph["w"], dh), "color": Color(1,1,1,0.75)})
-				items.append({"type": "reset_transform"})
+			var panim: FrameAnimation = ph.get("anim")
+			var tex: Texture2D = panim.get_current_texture() if panim else null
+			if tex:
+				# 分身与本体同 sheet 同锚点渲染：内容统一缩放到碰撞体高，与待机动画大小一致
+				items += _sw_anchor_draw(tex, panim, ph["x"], ph["y"], ph["w"], ph["h"], cam_x, _cam_y, ph.get("facing", 1), 0.75)
 			else:
-				items.append({"type": "tex", "tex": img, "rect": Rect2(px, py, ph["w"], dh), "color": Color(1,1,1,0.75)})
+				continue
+			var px = ph["x"] - cam_x + (ph["w"] - _sw_draw_w(panim, ph["h"])) / 2.0
+			var py = ph["y"] - _cam_y
 			var hp_pct = maxf(0, ph["hp"] / maxf(ph.get("max_hp", 1.0), 1.0))
 			items.append({"type": "rect", "rect": Rect2(px, py - 8, ph["w"], 4), "color": Color(0, 0, 0, 0.5)})
 			items.append({"type": "rect", "rect": Rect2(px, py - 8, ph["w"] * hp_pct, 4), "color": Color(0.53, 0.27, 0.8)})
@@ -588,3 +785,12 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 			owner.vx = 2.25 * boost * signf(owner.vx)
 	Fighter.update_state(owner, mx)
 	return mx
+
+## 体系统：影武者状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: ShadowwarriorComponent = f.components.get_component("shadowwarrior") if f.components else null
+	if comp and comp.iaido_active:
+		return Fighter.BODY_VAJRA  # 影舞流·居合
+	if f.image_state == "skill2":
+		return Fighter.BODY_SKILL  # 幻影·舞释放
+	return -1

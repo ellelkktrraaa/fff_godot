@@ -2,6 +2,10 @@
 class_name AstrologerCharacter
 
 const ASTROLOGER_ANI_DIR = "res://assets/char_ani/astrologer/"
+const ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS = preload("res://data/foot_gaps/astrologer_skill1_earth_pillar_foot_gaps.gd")
+const ASTROLOGER_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/astrologer_attack_foot_gaps.gd")
+const ASTROLOGER_SKILL1_FOOT_GAPS = preload("res://data/foot_gaps/astrologer_skill1_foot_gaps.gd")
+const ASTROLOGER_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/astrologer_idle_foot_gaps.gd")
 const CARD_DIR = "res://assets/char_ani/astrologer/cards/"
 
 # ── 22 张大阿卡纳贴图 ──
@@ -34,8 +38,9 @@ const CARD_WORLD           = preload(CARD_DIR + "fx_astrologer_card_world.png") 
 # ── 弹射物/特效贴图 ──
 const PROJ_METEOR = preload("res://assets/fx_astrologer_meteor.png")  # 普攻陨石
 const PROJ_CRATER = preload("res://assets/fx_astrologer_crater.png")  # 陨石坑
-const TEX_HEAVENLY_FIRE  = preload("res://assets/fx_astrologer_heavenly_fire.png")   # 权杖天火
-const TEX_FLAME_ZONE     = preload("res://assets/fx_astrologer_flame_zone.png")      # 权杖火焰区域
+const HEAVENLY_FIRE_SHEET = "res://assets/sheet（1.png"  # 天火一段动画 sheet（4×4, 15帧）
+const FLAME_ZONE_SHEET = "res://assets/sheet（2.png"     # 天火二段（火堆）动画 sheet（4×4, 15帧）
+const EARTH_PILLAR_SHEET = ASTROLOGER_ANI_DIR + "skill2_earth_pillar/sheet.png"  # 土墙升起动画（3×3, 9帧）
 const TEX_TIDE_F1 = preload("res://assets/fx_astrologer_tide_f1.png")  # 圣杯潮汐帧1
 const TEX_TIDE_F2 = preload("res://assets/fx_astrologer_tide_f2.png")  # 圣杯潮汐帧2
 const TEX_TIDE_F3 = preload("res://assets/fx_astrologer_tide_f3.png")  # 圣杯潮汐帧3
@@ -52,12 +57,57 @@ const LABEL_CUPS       = preload("res://assets/fx_astrologer_cups_label.png")
 const LABEL_SWORDS     = preload("res://assets/fx_astrologer_swords_label.png")
 const LABEL_PENTACLES  = preload("res://assets/fx_astrologer_pentacles_label.png")
 
-# ── 角色贴图（仅待机有独立贴图，其余暂复用）──
-const TEX_IDLE = preload(ASTROLOGER_ANI_DIR + "idle/astrologer_idle_f_1.png")
+## 二技能（小阿卡纳·星币土墙）动画锚点：从 foot_gaps 常量组装 FrameAnimation 需要的字典数组
+static func _astrologer_skill1_earth_pillar_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT.size():
+		anchors.append({
+			"foot_gap": ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT[i],
+			"head_gap": ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_HEAD[i],
+			"center_dx": ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CENTER[i],
+			"content_w": ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CONTENT_W[i],
+			"content_h": ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_GAPS.ASTROLOGER_SKILL1_EARTH_PILLAR_CONTENT_H[i],
+		})
+	return anchors
 
-## 单帧 FrameAnimation 快捷包装
-static func _fa(tex: Texture2D, dur: float = 999.0, loop: bool = true) -> FrameAnimation:
-	var a = FrameAnimation.new(); a.add_frame(tex, dur); a.loop = loop; return a
+## 普攻/二技能动画锚点：同 _astrologer_skill1_earth_pillar_anchors 写法（共用同一张 sheet）
+static func _astrologer_attack_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_FOOT.size():
+		anchors.append({
+			"foot_gap": ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_FOOT[i],
+			"head_gap": ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_HEAD[i],
+			"center_dx": ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_CENTER[i],
+			"content_w": ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_CONTENT_W[i],
+			"content_h": ASTROLOGER_ATTACK_FOOT_GAPS.ASTROLOGER_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## 一技能（圣三角）动画锚点：同 _astrologer_attack_anchors 写法
+static func _astrologer_skill1_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_FOOT.size():
+		anchors.append({
+			"foot_gap": ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_FOOT[i],
+			"head_gap": ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_HEAD[i],
+			"center_dx": ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_CENTER[i],
+			"content_w": ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_CONTENT_W[i],
+			"content_h": ASTROLOGER_SKILL1_FOOT_GAPS.ASTROLOGER_SKILL1_CONTENT_H[i],
+		})
+	return anchors
+
+## 待机动画锚点：同 _astrologer_skill1_anchors 写法
+static func _astrologer_idle_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_FOOT.size():
+		anchors.append({
+			"foot_gap": ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_FOOT[i],
+			"head_gap": ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_HEAD[i],
+			"center_dx": ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_CENTER[i],
+			"content_w": ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_CONTENT_W[i],
+			"content_h": ASTROLOGER_IDLE_FOOT_GAPS.ASTROLOGER_IDLE_CONTENT_H[i],
+		})
+	return anchors
 
 # ── 普攻: 陨星咒 ──
 const ATK_METEOR_DMG := 4.0          # 陨石直接伤害
@@ -94,7 +144,7 @@ const MINOR_ARCANA := [
 
 # ── 权杖·星辰余烬 ──
 const WANDS_FIRE_DAMAGE := 10.0      # 天火直接伤害
-const WANDS_FIRE_FRAMES := 20        # 天火持续帧数
+const WANDS_FIRE_FRAMES := 210       # 天火持续帧数（覆盖 34 帧×0.1s ≈ 204 帧动画）
 const WANDS_FIRE_TARGET_RANGE := 310 # 身前索敌范围（像素）
 const WANDS_FIRE_W := 200.0          # 天火/火焰绘制宽度
 const WANDS_FLAME_LIFE := 300        # 火焰区域持续 5秒
@@ -125,11 +175,12 @@ const SWORDS_TORNADO_FRAMES_LIST := [TEX_TORNADO_F1, TEX_TORNADO_F2, TEX_TORNADO
 static var tornadoes: Array = []
 
 # ── 星币·古脉壁立 ──
-const PENTACLES_WALL_DAMAGE := 10.0  # 顶飞伤害
+const PENTACLES_WALL_DAMAGE := 10.0  # 顶飞总伤害（按动画帧数分多段）
 const PENTACLES_WALL_HP := 20.0      # 土墙生命值
 const PENTACLES_WALL_LIFE := 300     # 持续 5s
-const PENTACLES_WALL_W := 120.0      # 土墙宽度（80×1.5）
-const PENTACLES_WALL_H := 180.0      # 土墙高度（120×1.5）
+const PENTACLES_WALL_W := 200.0      # 土墙宽度（基准 80 × 2.5）
+const PENTACLES_WALL_H := 300.0      # 土墙高度（基准 120 × 2.5）
+const PENTACLES_WALL_ANIM_FRAMES := 9  # 土墙升起动画帧数（多段伤害段数）
 const PENTACLES_WALL_SPAWN_DIST := 200.0  # 身前生成距离
 
 static var walls: Array = []
@@ -194,20 +245,26 @@ static func _draw_craters(_font, cam_x, _cam_y = 0.0):
 	for f in fires:
 		var ft = f.life / float(WANDS_FIRE_FRAMES)
 		var alpha = minf(ft * 3.0, 1.0)  # 初期渐入
+		var tex: Texture2D = f.anim.get_current_texture() if f.anim else null
+		if tex == null:
+			continue  # 动画未加载成功则跳过本帧
 		var draw_h = Constants.GROUND_Y - _cam_y  # 占满整个 y 轴
-		var scale = draw_h / maxf(TEX_HEAVENLY_FIRE.get_height(), 1.0)
-		var draw_w = TEX_HEAVENLY_FIRE.get_width() * scale
+		var scale = draw_h / maxf(tex.get_height(), 1.0)
+		var draw_w = tex.get_width() * scale
 		var fx = f.x - draw_w / 2.0 - cam_x
-		items.append({"type": "tex", "tex": TEX_HEAVENLY_FIRE, "rect": Rect2(fx, 50, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})
-	# ── 权杖火焰区域 ──
+		items.append({"type": "tex", "tex": tex, "rect": Rect2(fx, 0, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})  # y 上移100后下移50（-50→0）
+	# ── 权杖火焰区域（天火二段火堆动画）──
 	for fz in wands_flame_zones:
-		var alpha = 0.7
-		var scale = fz.w / maxf(TEX_FLAME_ZONE.get_width(), 1.0)
-		var draw_w = TEX_FLAME_ZONE.get_width() * scale
-		var draw_h = TEX_FLAME_ZONE.get_height() * scale
+		var tex: Texture2D = fz.anim.get_current_texture() if fz.anim else null
+		if tex == null:
+			continue  # 动画未加载成功则跳过
+		var alpha = 0.85
+		var scale = fz.w / maxf(tex.get_width(), 1.0)
+		var draw_w = tex.get_width() * scale
+		var draw_h = tex.get_height() * scale
 		var fx = fz.x + fz.w / 2.0 - draw_w / 2.0 - cam_x
-		var fy = fz.y + fz.h / 2.0 - draw_h / 2.0 - _cam_y - 30.0  # 上移30px（净效果）
-		items.append({"type": "tex", "tex": TEX_FLAME_ZONE, "rect": Rect2(fx, fy, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})
+		var fy = fz.y + fz.h / 2.0 - draw_h / 2.0 - _cam_y - 80.0  # 上移30后再上移50（净上移80px）
+		items.append({"type": "tex", "tex": tex, "rect": Rect2(fx, fy, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})
 	# ── 圣杯潮汐（4帧动画，随朝向翻转）──
 	for t in tides:
 		var frame_idx = int((CUPS_TIDE_FRAMES - t.life) / CUPS_TIDE_FRAME_DUR) % 4
@@ -239,13 +296,15 @@ static func _draw_craters(_font, cam_x, _cam_y = 0.0):
 			items.append({"type": "tex", "tex": tex, "rect": Rect2(fx, fy, draw_w, draw_h), "color": Color(1, 1, 1, 0.85)})
 	# ── 星币土墙 ──
 	for w in walls:
-		var scale = w.w / maxf(TEX_EARTH_WALL.get_width(), 1.0)
-		var draw_w = TEX_EARTH_WALL.get_width() * scale
-		var draw_h = TEX_EARTH_WALL.get_height() * scale
+		var tex: Texture2D = w.anim.get_current_texture() if w.anim else TEX_EARTH_WALL
+		if tex == null:
+			tex = TEX_EARTH_WALL
+		var draw_w = w.w  # 直接按碰撞盒尺寸绘制，保证碰撞盒与动画大小一致
+		var draw_h = w.h
 		var fx = w.x + w.w / 2.0 - draw_w / 2.0 - cam_x
 		var fy = w.y + w.h / 2.0 - draw_h / 2.0 - _cam_y
 		var alpha = minf(w.hp / PENTACLES_WALL_HP, 1.0)  # 受伤时变淡
-		items.append({"type": "tex", "tex": TEX_EARTH_WALL, "rect": Rect2(fx, fy, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})
+		items.append({"type": "tex", "tex": tex, "rect": Rect2(fx, fy, draw_w, draw_h), "color": Color(1, 1, 1, alpha)})
 	# ── 陨石坑 ──
 	for cr in GameWorld.craters:
 		var tex = cr.get("img")
@@ -345,11 +404,14 @@ static func get_config() -> Dictionary:
 			"skill2_predicted": -1,     # 预掷骰子结果（花色索引），-1=需重掷
 			"intro_timer": 120,         # 开场显示倒计时（2秒）
 		}, "world_arrays": ["craters"],  # craters: 陨石坑列表
+		"skill_anim_states": ["skill1", "skill2"],  # 技能动画：播放期间锁输入，受击可提前结束
 		"animations": {
-			"idle":   FrameAnimation.load_from_frames(ASTROLOGER_ANI_DIR + "idle/", "astrologer_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk":   _fa(TEX_IDLE, 999.0, true),
-			"jump":   _fa(TEX_IDLE, 999.0, true),
-			"attack": _fa(TEX_IDLE, 0.5, false),
+			"idle":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
+			"walk":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
+			"jump":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "attack/sheet.png", 4, 4, 14, 0.036, false, _astrologer_attack_anchors()),
+			"skill1": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "skill1/sheet.png", 5, 5, 24, 0.1, false, _astrologer_skill1_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "attack/sheet.png", 4, 4, 14, 0.036, false, _astrologer_attack_anchors()),
 			"ult":    FrameAnimation.load_from_frames(ASTROLOGER_ANI_DIR + "ult/", "astrologer_ult_f_", _ult_frame_specs(), false),
 		},
 		"dex": {
@@ -437,6 +499,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 		"bonus_text": bonus_text,
 	})
 
+	owner.set_animation_state("skill1")  # 一技能动画：播放一次，播完由 update_systems 回 idle
 	return {"success": true}
 
 # ── 技能二: 塔罗·小阿卡纳 ──
@@ -483,6 +546,8 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	owner.set_meta("skill2_name", suit.name_cn)
 	owner.set_meta("skill2_element", suit.element)
 	owner.set_meta("skill2_label_timer", 30)  # 0.5秒
+	owner.set_animation_state("skill2")  # 二技能动画：与普攻共用同一张 sheet（播完由 update_systems 回 idle）
+	GameWorld.trigger_shake(8.0, 12)  # 释放二技能：屏幕震动（四花色共用）
 
 	# ── 权杖·星辰余烬 ──
 	if idx == 0:  # 权杖
@@ -501,11 +566,15 @@ static func _skill2(owner: Fighter) -> Dictionary:
 				best_target = e
 		if best_target:
 			fire_x = best_target.pos_x + best_target.w / 2.0
+		var fire_anim = FrameAnimation.load_from_sprite_sheet(HEAVENLY_FIRE_SHEET, 4, 4, 15, 0.1, false)
+		fire_anim.play()  # 必须 play，否则 update() 不推进帧，一直停在第0帧（极小火苗）；只播一遍定格末帧
 		fires.append({
 			"x": fire_x,
 			"life": WANDS_FIRE_FRAMES,
 			"damage": WANDS_FIRE_DAMAGE,
 			"owner": owner,
+			"anim": fire_anim,
+			"dmg_timer": 0.0,
 		})
 		Fighter.emit_particles(fire_x, Constants.GROUND_Y - 100, 20, Color(1.0, 0.4, 0.1), 8, 14, "circle")
 
@@ -545,7 +614,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	# ── 星币·古脉壁立 ──
 	if idx == 3:  # 星币
 		var wx = owner.pos_x + owner.w / 2.0 + PENTACLES_WALL_SPAWN_DIST * owner.facing
-		var wy = Constants.GROUND_Y - PENTACLES_WALL_H
+		var wy = Constants.GROUND_Y - PENTACLES_WALL_H + 100.0  # 下移100像素
 		var wall_hp = PENTACLES_WALL_HP
 		var wall_life = PENTACLES_WALL_LIFE
 		var wall_dmg = PENTACLES_WALL_DAMAGE
@@ -553,6 +622,8 @@ static func _skill2(owner: Fighter) -> Dictionary:
 			wall_dmg += 5.0
 			wall_life += 120
 			wall_hp += 10.0
+		var wall_anim = FrameAnimation.load_from_sprite_sheet(EARTH_PILLAR_SHEET, 3, 3, 9, 0.1, false)
+		wall_anim.play()  # 必须 play，否则 update() 不推进帧（动画定格第0帧空白）
 		var wall = {
 			"x": wx - PENTACLES_WALL_W / 2.0,
 			"y": wy,
@@ -561,8 +632,9 @@ static func _skill2(owner: Fighter) -> Dictionary:
 			"hp": wall_hp,
 			"life": wall_life,
 			"owner": owner,
-			"dmg_dealt": false,
+			"hits": 0,  # 已触发的多段伤害次数（动画帧数上限）
 			"dmg": wall_dmg,
+			"anim": wall_anim,
 		}
 		walls.append(wall)
 		# 作为平台实体加入（阻挡敌人移动）
@@ -635,6 +707,12 @@ static func _normal_attack(owner: Fighter):
 # ── 每帧更新: 陨石飞行 + 陨石坑生命周期 + DoT ──
 
 static func update_systems(owner: Fighter):
+	# 动画帧推进（多帧 sheet 动画需要每帧 update 才能换帧）
+	if owner.current_anim and owner.current_anim.is_playing():
+		owner.current_anim.update(1.0)
+	# 技能动画（非循环：skill2 / skill1_earth_pillar）播完自动回到普通状态
+	if owner.image_state.begins_with("skill") and owner.current_anim and owner.current_anim.is_finished():
+		owner.set_animation_state("idle")
 	# ── 四花色独立冷却递减 ──
 	var cds = owner.get_meta("skill2_cds")
 	if cds != null:
@@ -735,18 +813,26 @@ static func update_systems(owner: Fighter):
 	var fi = fires.size() - 1
 	while fi >= 0:
 		var f = fires[fi]
+		if f.anim:
+			f.anim.update(1.0)  # 推进天火动画帧
 		f.life -= 1
-		# 粒子
-		Fighter.emit_particles(f.x, Constants.GROUND_Y - 40, 3, Color(1.0, 0.4, 0.1, 0.6), 4, 8, "star")
-		# 每帧检测范围内敌人造成伤害（类似陨石坑 DoT）
-		for e in GameWorld.entities:
-			if e == f.owner or e.hp <= 0:
-				continue
-			if _rect_overlap(f.x - WANDS_FIRE_W / 2.0, 0, WANDS_FIRE_W, Constants.GROUND_Y, e.pos_x, e.pos_y, e.w, e.h):
-				if is_instance_valid(f.owner):
-					Fighter.apply_damage(e, f.damage / WANDS_FIRE_FRAMES, f.owner, false, Color(1.0, 0.4, 0.1), "hit_enemy", "astrologer_wands_fire")
-		# 生命结束 → 生成火焰区域
+		# 粒子（节流：每4帧少量生成，避免 210 帧持续产出大量粒子）
+		if f.life % 4 == 0:
+			Fighter.emit_particles(f.x, Constants.GROUND_Y - 40, 2, Color(1.0, 0.4, 0.1, 0.6), 4, 8, "star")
+		# DoT 伤害（每60帧触发一次，避免每帧 apply_damage 的高开销）
+		f.dmg_timer += 1.0
+		while f.dmg_timer >= 60.0:
+			f.dmg_timer -= 60.0
+			for e in GameWorld.entities:
+				if e == f.owner or e.hp <= 0:
+					continue
+				if _rect_overlap(f.x - WANDS_FIRE_W / 2.0, 0, WANDS_FIRE_W, Constants.GROUND_Y, e.pos_x, e.pos_y, e.w, e.h):
+					if is_instance_valid(f.owner):
+						Fighter.apply_damage(e, f.damage / (WANDS_FIRE_FRAMES / 60.0), f.owner, false, Color(1.0, 0.4, 0.1), "hit_enemy", "astrologer_wands_fire", 0, 1)
+		# 生命结束 → 生成火焰区域（天火二段火堆）
 		if f.life <= 0:
+			var flame_anim = FrameAnimation.load_from_sprite_sheet(FLAME_ZONE_SHEET, 4, 4, 15, 0.1, true)
+			flame_anim.play()  # 必须 play，否则 update() 不推进帧
 			wands_flame_zones.append({
 				"x": f.x - WANDS_FIRE_W / 2.0,
 				"y": Constants.GROUND_Y - WANDS_FLAME_H,
@@ -754,6 +840,7 @@ static func update_systems(owner: Fighter):
 				"life": WANDS_FLAME_LIFE,
 				"dmg_timer": 0.0,
 				"owner": f.owner,
+				"anim": flame_anim,
 			})
 			Fighter.emit_particles(f.x, Constants.GROUND_Y, 20, Color(1.0, 0.4, 0.1), 8, 14, "circle")
 			fires.remove_at(fi)
@@ -763,6 +850,8 @@ static func update_systems(owner: Fighter):
 	var fzi = wands_flame_zones.size() - 1
 	while fzi >= 0:
 		var fz = wands_flame_zones[fzi]
+		if fz.anim:
+			fz.anim.update(1.0)  # 推进火堆动画帧
 		fz.life -= 1
 		if fz.life <= 0:
 			wands_flame_zones.remove_at(fzi)
@@ -776,7 +865,7 @@ static func update_systems(owner: Fighter):
 					continue
 				if _rect_overlap(fz.x, fz.y, fz.w, fz.h, e.pos_x, e.pos_y, e.w, e.h):
 					if is_instance_valid(fz.owner):
-						Fighter.apply_damage(e, WANDS_FLAME_DOT, fz.owner, false, Color(0.8, 0.3, 0.0), "hit_enemy", "astrologer_wands_flame")
+						Fighter.apply_damage(e, WANDS_FLAME_DOT, fz.owner, false, Color(0.8, 0.3, 0.0), "hit_enemy", "astrologer_wands_flame", 0, 1)
 		fzi -= 1
 
 	# ── 圣杯潮汐 ──
@@ -795,7 +884,7 @@ static func update_systems(owner: Fighter):
 				continue
 			if _rect_overlap(t.x - CUPS_TIDE_W / 2.0, 0, CUPS_TIDE_W, Constants.GROUND_Y, e.pos_x, e.pos_y, e.w, e.h):
 				if is_instance_valid(t.owner):
-					Fighter.apply_damage(e, t.damage / CUPS_TIDE_FRAMES, t.owner, false, Color(0.3, 0.5, 1.0), "hit_enemy", "astrologer_cups_tide")
+					Fighter.apply_damage(e, t.damage / CUPS_TIDE_FRAMES, t.owner, false, Color(0.3, 0.5, 1.0), "hit_enemy", "astrologer_cups_tide", 0, 1)
 				if t.get("enhanced") and is_instance_valid(t.owner):
 					e.slow_timer = 180
 					e.slow_percent = 0.4
@@ -821,30 +910,32 @@ static func update_systems(owner: Fighter):
 				continue
 			if _rect_overlap(tn.x - SWORDS_TORNADO_W / 2.0, tn.y_center - tn_h / 2.0, SWORDS_TORNADO_W, tn_h, e.pos_x, e.pos_y, e.w, e.h):
 				if is_instance_valid(tn.owner):
-					Fighter.apply_damage(e, tn.damage / SWORDS_TORNADO_FRAMES, tn.owner, false, Color(0.7, 0.8, 1.0), "hit_enemy", "astrologer_swords_tornado")
+					Fighter.apply_damage(e, tn.damage / SWORDS_TORNADO_FRAMES, tn.owner, false, Color(0.7, 0.8, 1.0), "hit_enemy", "astrologer_swords_tornado", 0, 1)
 		tni -= 1
 
 	# ── 星币土墙 ──
 	var wi = walls.size() - 1
 	while wi >= 0:
 		var w = walls[wi]
+		if w.anim:
+			w.anim.update(1.0)  # 推进土墙升起动画（非循环，播完定格最高帧）
 		w.life -= 1
 		if w.life <= 0 or w.hp <= 0:
 			_remove_wall(w, wi)
 			wi -= 1
 			continue
-		# 敌人碰撞 → 顶飞 + 伤害（仅前60帧，一次性）
-		if not w.dmg_dealt and w.life >= PENTACLES_WALL_LIFE - 60:
+		# 敌人碰撞 → 多段伤害 + 顶飞：动画 9 帧内每帧一段（w.dmg / 9），共 9 段
+		if w.hits < PENTACLES_WALL_ANIM_FRAMES:
+			w.hits += 1
 			for e in GameWorld.entities:
 				if e == w.owner or e.hp <= 0:
 					continue
 				if _rect_overlap(w.x, w.y, w.w, w.h, e.pos_x, e.pos_y, e.w, e.h):
 					if is_instance_valid(w.owner):
-						Fighter.apply_damage(e, w.dmg, w.owner, false, Color(0.6, 0.4, 0.2), "hit_enemy", "astrologer_pentacles_wall")
+						Fighter.apply_damage(e, w.dmg / float(PENTACLES_WALL_ANIM_FRAMES), w.owner, false, Color(0.6, 0.4, 0.2), "hit_enemy", "astrologer_pentacles_wall", 0, 1)
 					e.vy = -10  # 顶飞
 					e.vx = (w.owner.facing if is_instance_valid(w.owner) else 1) * 8  # 击退
 					e.grounded = false
-					w.dmg_dealt = true
 					break
 		# 投射物阻挡
 		var pj = GameWorld.projectiles.size() - 1
@@ -907,6 +998,7 @@ static func _update_meteor(cr: Dictionary, owner: Fighter, _idx: int):
 
 	# 检查是否到达地面（落地 → 生成陨石坑）
 	if cr.y + cr.h >= Constants.GROUND_Y or cr.life <= 0:
+		GameWorld.trigger_shake(8.0, 12)  # 普攻（陨石）落地：屏幕震动
 		# 转为陨石坑
 		cr.erase("pending")
 		cr.erase("vx"); cr.erase("vy")
@@ -960,6 +1052,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	GameWorld.active_overlays.append({
 		"anim": ult_anim,
 		"position": {"type": "fullscreen"},
+		"owner": owner,
 		"overlay_id": "astrologer_ult",
 		"on_finish": func():
 			owner.state = "idle"
@@ -1119,3 +1212,15 @@ static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
 ## 地狱模式专属走位参数（空字典表示不覆盖）
 static func ai_hell_desire(f: Fighter) -> Dictionary:
 	return {"min": 180, "max": 420}
+
+## 体系统：占星术士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	if f.state == "ult":
+		return Fighter.BODY_VAJRA  # 愚者之旅
+	if f.image_state == "skill1" or f.image_state == "skill2":
+		return Fighter.BODY_SKILL  # 圣三角 / 小阿卡纳
+	return -1
+
+## 被中断时：解除四花色操作锁
+static func on_interrupted(f: Fighter):
+	f.remove_meta("swords_lock_timer")

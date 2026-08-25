@@ -14,9 +14,13 @@ var rose_skill1_holding: bool = false   # 强化一技能持续抓取中
 var rose_skill1_grab_pos_x: float = 0.0 # 抓取锁定x坐标
 var rose_skill1_enhanced_slashes: Array = []
 var rose_skill1_slash_spawn_timer: int = 0
+var rose_skill1_trail_spawned: bool = false  # 强化四连斩拖尾（sheet.png）是否已生成
+var rose_skill1_enhanced_used: bool = false  # 本次一技能是否为强化（区分常态/强化刀光生成）
+var rose_skill1_prev_blade_idx: int = -1  # 常态刀光动画上一帧索引（帧跳变检测触发中震）
 var rose_blood_abyss_suppressed: bool = false
 var time_stop: bool = false
 var time_stop_timer: int = 0
+var ult_hits: Array = []  # 大招六段斩击命中标记（长度6，逐段置true）
 
 func update():
 	if blood_abyss > 0 and owner.hp < owner.max_hp:

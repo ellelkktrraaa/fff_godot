@@ -156,3 +156,19 @@ static func update_systems(f: Fighter):
 	if not f.dashing and not f.charging_skill1 and f.image_state == "charge":
 		f.image_state = ""
 #FIX END
+
+## 体系统：圣骑士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: PaladinComponent = f.components.get_component("paladin") if f.components else null
+	if comp and comp.holy_empower_active:
+		return Fighter.BODY_ARMOR  # 圣佑 = 霸体
+	if f.charging_skill1:
+		return Fighter.BODY_SKILL  # 正义冲锋蓄力
+	if comp and comp.divine_shield_active:
+		return Fighter.BODY_SKILL  # 神圣壁垒 = 防御类技能体
+	return -1
+
+## 防御/招架类：神圣壁垒免疫打断
+static func is_defense_parry(f: Fighter) -> bool:
+	var comp: PaladinComponent = f.components.get_component("paladin") if f.components else null
+	return comp != null and comp.divine_shield_active

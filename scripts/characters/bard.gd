@@ -91,6 +91,7 @@ static func get_config() -> Dictionary:
 		"speed": 2.25, "attack_range": 0, "attack_damage": 5,
 		"attack_cooldown": 120, "attack_delay": 8, "attack_duration": 30,
 		"image_scale": 1.2,
+		"skill_anim_states": ["skill1", "skill2"],  # 技能动画：播放期间锁输入，受击可提前结束
 		"fields": {}, "world_arrays": [],
 		"animations": {
 			"idle": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "idle/sheet.png", 4, 4, 14, 0.1, true, _bard_idle_anchors()),
@@ -98,11 +99,8 @@ static func get_config() -> Dictionary:
 			"jump": FrameAnimation.load_jump_sheet(BARD_ANI_DIR + "jump/sheet.png", 3, 2, 5, 0.2, _bard_jump_anchors()),
 			"attack": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack/sheet.png", 3, 3, 8, 0.05, false, _bard_attack_anchors()),
 			"attack_note": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack_note/sheet.png", 3, 2, 6, 0.1, false, _bard_attack_note_anchors()),
-			"skill1": FrameAnimation.load_from_frames(BARD_ANI_DIR + "attack/", "bard_attack_f_", [
-				{"index": 1, "duration": 0.5},
-				{"index": 2, "duration": 0.5},
-				{"index": 3, "duration": 0.5},
-			], false),
+			"skill1": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack/sheet.png", 3, 3, 8, 0.05, false, _bard_attack_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(BARD_ANI_DIR + "attack/sheet.png", 3, 3, 8, 0.05, false, _bard_attack_anchors()),
 			"skill_perform": FrameAnimation.load_from_frames(BARD_ANI_DIR + "Whisper/", "bard_perform_f_", [
 				{"index": 1, "duration": 0.8},
 				{"index": 2, "duration": 0.4},
@@ -378,6 +376,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	GameWorld.active_overlays.append({
 		"anim": ult_anim,
 		"position": {"type": "fullscreen"},
+		"owner": owner,
 		"overlay_id": "bard_ult",
 		"on_finish": func():
 			comp.ult_active = false
@@ -456,7 +455,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		enemy.speed_multiplier = 1.0
 		enemy.jump_reduction = 1.0
 
-	owner.set_animation_state("skill1")
+	owner.set_animation_state("skill2")
 	return {"success": true}
 
 ## 每帧更新领域效果
@@ -587,6 +586,10 @@ static func update_systems(f: Fighter):
 	if f.current_anim:
 		f.current_anim.update(1.0)
 
+	# 技能动画（非循环：skill1/skill2 共用普攻 sheet）播完自动回到待机
+	if f.image_state.begins_with("skill") and f.current_anim and f.current_anim.is_finished():
+		f.set_animation_state("idle")
+
 	_handle_perform_audio(f, comp.perform_active if comp else false)
 	_update_note_hits(comp)
 	_update_skill1_hits(comp)
@@ -627,9 +630,7 @@ static func _update_ult(comp: BardComponent, f: Fighter):
 		comp.ult_damage_acc += DAMAGE_PER_TICK
 		var dmg = floor(comp.ult_damage_acc)
 		if dmg > 0:
-			var enemy = GameWorld.get_opponent(f)
-			if enemy and enemy.hp > 0:
-				Fighter.apply_damage(enemy, float(dmg), f, false, Color(0.3, 0.6, 1.0), "hit_enemy", "ult", 0)
+			Fighter.apply_ult_damage_zone(f, float(dmg), Color(0.3, 0.6, 1.0))
 			comp.ult_damage_acc -= dmg
 
 	# overlay 动画结束后由 on_finish 回调清理 ult_active
@@ -836,3 +837,17 @@ static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
 ## 地狱模式专属走位参数（空字典表示不覆盖）
 static func ai_hell_desire(f: Fighter) -> Dictionary:
 	return {"min": 200, "max": 380}
+
+## 体系统：吟游诗人状态分类（演奏 = 普攻体）
+static func body_priority(f: Fighter) -> int:
+	var comp: BardComponent = f.components.get_component("bard") if f.components else null
+	if comp and comp.ult_active:
+		return Fighter.BODY_VAJRA  # 胜过天上的星辰
+	return -1
+
+## 被中断时：停止演奏
+static func on_interrupted(f: Fighter):
+	var comp: BardComponent = f.components.get_component("bard") if f.components else null
+	if comp:
+		comp.skill1_active = false
+		comp.skill2_active = false

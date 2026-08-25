@@ -4,24 +4,42 @@ class_name AssassinCharacter
 const AssassinComponent = preload("res://scripts/components/assassin_component.gd")
 
 const PROJ_SLASH2 = preload("res://assets/fx_assassin_slash.png")
+const ASSASSIN_SLASH_SHEET = "res://assets/sheet.png"
+const ASSASSIN_SKILL2_SHEET = "res://assets/sheet1.png"
 const ASSASSIN_ANI_DIR = "res://assets/char_ani/assassin/"
 const ASSASSIN_ULT_HEAD_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_head_foot_gaps.gd")
 const ASSASSIN_ULT_TAIL_FOOT_GAPS = preload("res://data/foot_gaps/assassin_ult_tail_foot_gaps.gd")
+const ASSASSIN_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/assassin_idle_foot_gaps.gd")
+const ASSASSIN_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/assassin_jump_foot_gaps.gd")
+const ASSASSIN_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/assassin_attack_foot_gaps.gd")
+const ASSASSIN_WALK_FOOT_GAPS = preload("res://data/foot_gaps/assassin_walk_foot_gaps.gd")
+
+# 手感反馈
+const SLASH_W := 150.0    # 普攻斩击动画绘制宽度（1.5 倍原 100）
+const SLASH_H := 60.0     # 普攻斩击动画绘制高度（1.5 倍原 40）
+const ATK_SHAKE := 5.0        # 普攻微弱震动强度
+const ATK_SHAKE_DUR := 6      # 普攻微弱震动持续帧数
+# 完美闪避演出常量见 assassin_component.gd（DODGE_SLOW_MO_* / DODGE_ZOOM*）
+const SKILL2_SHAKE := 10.0   # 二技能释放震动强度（偏轻）
+const SKILL2_SHAKE_DUR := 12 # 二技能释放震动持续帧数
 
 static func get_config() -> Dictionary:
 	return {
 		"id": "assassin", "name": "刺客", "hp": 90, "max_energy": 100, "energy_regen": 0.05,
 		"speed": 2.4, "attack_range": 50, "attack_damage": 5,
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
+		"anim_scale": 0.8,
+		"dash_image_scale": 2.0,  # 一瞬冲刺贴图放大2倍
+		"skill_anim_states": ["skill2"],  # 技能动画：播放期间锁输入，受击可提前结束
 		"fields": {"shadow_energy":0.0,"shadow_energy_max":5.0,"shadow_stance":false,"shadow_stance_timer":0,"shadow_energy_drain_rate":0.0104,"is_invincible":false,"invincible_timer":0,"enhanced_slash":false,"enhanced_slash_timer":0,"slash_active":false,"slash_timer":0,"slash_x":0.0,"slash_y":0.0,"slash_facing":1,"slash_damage_dealt":false,"skill2_active":false,"skill2_timer":0,"skill2_x":0.0,"skill2_y":0.0,"skill2_facing":1,"skill2_damage_dealt":false,"ult_active":false,"ult_timer":0,"ult_damage_timer":0,"time_stop":false,"time_stop_timer":0,"dodge_success":false,"dodge_slow_mo":0,"shadow_trail":[],"max_shadow_trail":12},
 		"world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "idle/", "assassin_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "walk/", "assassin_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "jump/", "assassin_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "attack/", "assassin_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"idle": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "idle/sheet.png", 4, 4, 16, 0.1, true, _assassin_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "walk/sheet.png", 4, 4, 15, 0.1, true, _assassin_walk_anchors()),
+			"jump": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "jump/sheet.png", 5, 4, 20, 0.1, true, _assassin_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "attack/sheet.png", 4, 4, 13, 0.04, false, _assassin_attack_anchors()),
 			"skill1": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "skill1/", "assassin_skill1_f_", [{"index": 1, "duration": 0.5}], false),
-			"skill2": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "skill2/", "assassin_skill2_f_", [{"index": 1, "duration": 0.5}], false),
+			"skill2": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "skill2/sheet.png", 4, 4, 13, 0.04, false, _assassin_attack_anchors()),
 			"ult": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "ult/", "assassin_ult_f_", [
 				{"index": 0, "duration": 0.2}, {"index": 1, "duration": 0.2}, {"index": 2, "duration": 0.2},
 				{"index": 3, "duration": 0.2}, {"index": 4, "duration": 0.2}, {"index": 5, "duration": 0.2},
@@ -73,6 +91,58 @@ static func _assassin_ult_tail_anchors() -> Array:
 		})
 	return anchors
 
+## 待机动画锚点：同 _assassin_ult_head_anchors 写法
+static func _assassin_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_FOOT[i],
+			"head_gap": ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_HEAD[i],
+			"center_dx": ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_CENTER[i],
+			"content_w": ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_CONTENT_W[i],
+			"content_h": ASSASSIN_IDLE_FOOT_GAPS.ASSASSIN_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## 跳跃动画锚点：同 _assassin_ult_head_anchors 写法
+static func _assassin_jump_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_FOOT[i],
+			"head_gap": ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_HEAD[i],
+			"center_dx": ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_CENTER[i],
+			"content_w": ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_CONTENT_W[i],
+			"content_h": ASSASSIN_JUMP_FOOT_GAPS.ASSASSIN_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## 普攻/二技能动画锚点：同 _assassin_ult_head_anchors 写法（两动画共用同一张 sheet）
+static func _assassin_attack_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_FOOT[i],
+			"head_gap": ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_HEAD[i],
+			"center_dx": ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_CENTER[i],
+			"content_w": ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_CONTENT_W[i],
+			"content_h": ASSASSIN_ATTACK_FOOT_GAPS.ASSASSIN_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## 移动动画锚点：同 _assassin_ult_head_anchors 写法
+static func _assassin_walk_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_FOOT[i],
+			"head_gap": ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_HEAD[i],
+			"center_dx": ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_CENTER[i],
+			"content_w": ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_CONTENT_W[i],
+			"content_h": ASSASSIN_WALK_FOOT_GAPS.ASSASSIN_WALK_CONTENT_H[i],
+		})
+	return anchors
+
 static func _can_use_attack(owner: Fighter) -> bool:
 	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
 	return owner.attack_cooldown <= 0 and not owner.attacking and (not comp or not comp.ult_active)
@@ -104,12 +174,18 @@ static func _attack(owner: Fighter) -> Dictionary:
 	owner.attack_hit_dealt = false
 	owner.attack_cooldown = 60
 	owner.state = "attack"
+	# 普攻微弱震动（手感反馈）
+	GameWorld.trigger_shake(ATK_SHAKE, ATK_SHAKE_DUR)
 	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
 	if comp:
 		comp.slash_active = true
 		comp.slash_timer = 30
 		comp.slash_facing = owner.facing
 		comp.slash_damage_dealt = false
+		# 斩击动画：懒加载一次，每次攻击从头播放（14 帧 × 0.035s ≈ 0.5s 匹配斩击窗口）
+		if comp.slash_anim == null:
+			comp.slash_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_SLASH_SHEET, 4, 4, 14, 0.035, false)
+		comp.slash_anim.play()
 		if comp.enhanced_slash and comp.enhanced_slash_timer > 0:
 			comp.slash_x = owner.pos_x - (owner.facing * 40) + owner.w/2 - 50
 			comp.slash_y = owner.pos_y + 10
@@ -136,16 +212,22 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	Fighter.emit_particles(owner.pos_x+owner.w/2, owner.pos_y+owner.h/2, 20, Color(0.67,0.53,1.0), 4, 6, "star")
 	return {"success": true}
 
+## 二技能剑气动画：每道剑气独立的 FrameAnimation（循环播放），避免同角色对局共享帧状态
+static func _make_skill2_anim() -> FrameAnimation:
+	return FrameAnimation.load_from_sprite_sheet(ASSASSIN_SKILL2_SHEET, 4, 3, 10, 0.1, true)
+
 static func _skill2(owner: Fighter) -> Dictionary:
 	var dir = owner.facing
 	var start_x = owner.pos_x + (owner.w if dir==1 else 0)
 	var start_y = owner.pos_y + 20
-	#FIXED BUG: 裂空斩(技能二)需要屏幕抖动效果,使用GameWorld.set()绕过Godot4 autoload静态赋值限制
-	GameWorld.set("screen_shake_intensity", 20.0)
-	GameWorld.set("screen_shake_duration", 20)
-	#FIX END
-	# 裂空斩为飞行物：life=240（4 秒）持续飞行，穿透性攻击
-	GameWorld.projectiles.append({"x":start_x,"y":start_y,"w":60,"h":30,"vx":8*dir,"vy":0,"life":240,"damage":15,"owner":owner,"type":"assassin_skill2","color":Color(0.53,0.27,0.8),"reflected":false,"piercing":true,"hit_targets":[],"img":PROJ_SLASH2})
+	# 裂空斩（技能二）释放瞬间：中度屏幕震动
+	GameWorld.trigger_shake(SKILL2_SHAKE, SKILL2_SHAKE_DUR)
+	owner.set_animation_state("skill2")  # 二技能动画：播放一次，播完由 update_systems 回 idle
+	# 剑气延迟 6 帧后生成（先存入组件，由 update_systems 计时生成）
+	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
+	if comp:
+		comp.skill2_delay_timer = 6
+		comp.skill2_pending = {"x":start_x,"y":start_y,"w":60,"h":30,"vx":8*dir,"vy":0,"life":240,"damage":15,"owner":owner,"type":"assassin_skill2","color":Color(0.53,0.27,0.8),"reflected":false,"piercing":true,"hit_targets":[],"img":_make_skill2_anim(),"priority":1}
 	return {"success": true}
 
 static func _ult(owner: Fighter) -> Dictionary:
@@ -241,24 +323,40 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	Fighter.update_state(owner, mx)
 	return mx
 
-## 系统更新：大招持续伤害 + 注册/注销绘制回调
+## 系统更新：动画帧推进 + 大招持续伤害 + 注册/注销绘制回调
 static func update_systems(f: Fighter):
+	# 动画帧推进（多帧 sheet 动画需要每帧 update 才能换帧）
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
 	var comp: AssassinComponent = f.components.get_component("assassin") if f.components else null
 	if not comp:
 		return
-	# 次元斩：活跃时注册绘制回调
+	# 二技能动画（非循环）播完自动回到普通状态
+	if f.image_state == "skill2" and f.current_anim and f.current_anim.is_finished():
+		f.set_animation_state("idle")
+	# 二技能剑气延迟出现：释放后 6 帧生成
+	if comp.skill2_delay_timer > 0:
+		comp.skill2_delay_timer -= 1
+		if comp.skill2_delay_timer <= 0 and not comp.skill2_pending.is_empty():
+			GameWorld.projectiles.append(comp.skill2_pending)
+			comp.skill2_pending = {}
+	# 次元斩：活跃时推进斩击动画并注册绘制回调
 	if comp.slash_active:
+		var slash_anim: FrameAnimation = comp.slash_anim
+		if slash_anim and slash_anim.is_playing():
+			slash_anim.update(1.0)
 		GameWorld.register_draw_effect(str(f.get_instance_id()) + "_slash", func(font, cam_x, _cam_y = 0.0):
 			var items: Array = []
 			var sx = comp.slash_x - cam_x
 			if sx > -120 and sx < Constants.W + 120:
-				var tex = preload("res://assets/fx_assassin_slash_ult.png")
-				if comp.slash_facing < 0:
-					items.append({"type": "set_transform", "pos": Vector2(sx + 100, comp.slash_y - _cam_y), "scale": Vector2(-1, 1)})
-					items.append({"type": "tex", "tex": tex, "rect": Rect2(0, 0, 100, 40), "color": Color(1,1,1,0.9)})
-					items.append({"type": "reset_transform"})
-				else:
-					items.append({"type": "tex", "tex": tex, "rect": Rect2(sx, comp.slash_y - _cam_y, 100, 40), "color": Color(1,1,1,0.9)})
+				var tex = slash_anim.get_current_texture() if slash_anim else null
+				if tex:
+					if comp.slash_facing < 0:
+						items.append({"type": "set_transform", "pos": Vector2(sx + SLASH_W, comp.slash_y - _cam_y), "scale": Vector2(-1, 1)})
+						items.append({"type": "tex", "tex": tex, "rect": Rect2(0, 0, SLASH_W, SLASH_H), "color": Color(1,1,1,0.9)})
+						items.append({"type": "reset_transform"})
+					else:
+						items.append({"type": "tex", "tex": tex, "rect": Rect2(sx, comp.slash_y - _cam_y, SLASH_W, SLASH_H), "color": Color(1,1,1,0.9)})
 			return items
 		, 0)
 	else:
@@ -276,28 +374,27 @@ static func update_systems(f: Fighter):
 					else:
 						items.append({"type": "set_transform", "pos": Vector2(tx, trail["y"] - _cam_y), "scale": Vector2.ONE})
 					var anim = f.current_anim
-					if anim and anim.current_texture:
-						items.append({"type": "tex", "tex": anim.current_texture, "rect": Rect2(0, 0, f.w, f.h), "color": Color(0.4, 0.27, 0.6, alpha * 0.5)})
+					var trail_tex = anim.get_current_texture() if anim else null
+					if trail_tex:
+						items.append({"type": "tex", "tex": trail_tex, "rect": Rect2(0, 0, f.w, f.h), "color": Color(0.4, 0.27, 0.6, alpha * 0.5)})
 					items.append({"type": "reset_transform"})
 			return items
 		, 1)
 	else:
 		GameWorld.unregister_draw_effect(str(f.get_instance_id()) + "_trail")
-	# 大招持续伤害
-	if not comp.ult_active:
-		return
-	# 每 15 帧（0.25s）造成 3 点伤害，全程约 2.8s → ~ 33.6 点
-	comp.ult_damage_timer += 1
-	if comp.ult_damage_timer >= 15:
-		comp.ult_damage_timer = 0
-		var target = GameWorld.get_opponent(f)
-		if target and target.hp > 0:
-			Fighter.apply_damage(target, 3, f, false, Color(0.53, 0.27, 0.8))
-	# 冲刺回调注入：一瞬闪避
+	# 冲刺回调注入：一瞬闪避（必须放在 ult 提前 return 之前，保证非大招时也注入路径检测）
 	if f.dashing and comp.is_invincible:
 		f.dash_step_callbacks = [func(old_x, new_x): _check_dodge_through_projectiles(f, old_x, new_x, comp)]
 	else:
 		f.dash_step_callbacks.clear()
+	# 大招持续伤害
+	if not comp.ult_active:
+		return
+	# 大招持续伤害：每 15 帧（0.25s）造成 3 点伤害，全程约 2.8s → ~ 33.6 点
+	comp.ult_damage_timer += 1
+	if comp.ult_damage_timer >= 15:
+		comp.ult_damage_timer = 0
+		Fighter.apply_ult_damage_zone(f, 3, Color(0.53, 0.27, 0.8))
 
 # ── 刺客闪避（从 DashSystem 迁移至此）──
 static func _check_dodge_through_projectiles(f: Fighter, old_x: float, new_x: float, comp: AssassinComponent):
@@ -320,6 +417,16 @@ static func _check_dodge_through_projectiles(f: Fighter, old_x: float, new_x: fl
 				if comp.shadow_energy >= comp.shadow_energy_max and not comp.shadow_stance:
 					comp.shadow_stance = true
 					comp.shadow_stance_timer = 480
+				# 完美闪避演出（时缓+拉近）由组件 update() 统一触发（无论哪条闪避路径先置位）
 				Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 15, Color(0.667, 0.533, 1.0), 3, 5, "star", 0.8)
 				print("[DODGE-DEBUG] ★ 闪避触发（路径检测）！shadow_energy=", comp.shadow_energy, " dodge_slow_mo=", comp.dodge_slow_mo)
 			break
+
+## 体系统：刺客状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: AssassinComponent = f.components.get_component("assassin") if f.components else null
+	if comp and comp.ult_active:
+		return Fighter.BODY_VAJRA  # 天地灭尽
+	if f.image_state == "skill2":
+		return Fighter.BODY_SKILL  # 裂空斩
+	return -1

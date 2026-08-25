@@ -39,7 +39,7 @@ func test_hell_preset_used():
 	GameWorld.difficulty = "hell"
 	var preset = Constants.AI_PRESETS.get("hell")
 	assert_not_null(preset, "应有 hell 预设")
-	assert_eq(preset["react"], 60, "hell 反应延迟 60")
+	assert_eq(preset["react"], 42, "hell 反应延迟 42（较 hard 降 30%）")
 	
 	GameWorld.difficulty = "medium"
 

@@ -10,6 +10,11 @@ const JUMP_VY := 10.0
 const BUILD_MOVE_SPEED := 2.0
 const AI_JUMP_BONUS := 1.1   # AI 跳跃性能 = 玩家的 1.1 倍（图构建与执行的跳跃水平速度上限）
 const SAFE_MARGIN := 8.0     # 平台安全边距：AI 行走不越过平台边缘，防止无意走出掉落
+
+# ── 地狱导航放宽 [HELL-ENHANCE]（仅 hell 生效，防风筝：让 AI 能追上跳平台的玩家） ──
+const NAV_HELL_HORIZ_MULT := 2.0   # 跳跃水平范围 ×2（450px 间隙地狱可跳，hard 不可跳）
+const NAV_HELL_JUMP_VY := 13.0     # 地狱起跳速度（最高跳高 ≈384px，对应"可达 250 / 不可达 400"）
+
 static var _adj: Array = []
 static var _graph_built: bool = false
 
@@ -158,17 +163,21 @@ static func _follow_path_step(f, ai_plat, next_plat, move_speed: float, dir_to_t
 	#   目标在下方 → 走出平台自然下落（vy=0 起，重力加速）
 	#   目标在上方/同高 → 起跳（vy=-JUMP_VY 的抛物线）
 	var dy: float = from_y - to_y  # 正 = 目标在上方
+	# 地狱放宽：更大起跳速度（更高/更远可达），与图构建一致
+	var jump_vy: float = NAV_HELL_JUMP_VY if _hell_nav() else JUMP_VY
+	var horiz_mult: float = NAV_HELL_HORIZ_MULT if _hell_nav() else 1.0
 	var t_air: float = 0.0
 	if dy < 0.0:
 		t_air = sqrt(2.0 * (to_y - from_y) / GRAVITY)
 	else:
-		var disc: float = JUMP_VY * JUMP_VY - 2.0 * GRAVITY * dy
+		var disc: float = jump_vy * jump_vy - 2.0 * GRAVITY * dy
 		if disc >= 0.0:
-			t_air = (JUMP_VY + sqrt(disc)) / GRAVITY
+			t_air = (jump_vy + sqrt(disc)) / GRAVITY
 
 	var speed_mult: float = 1.5 if _rush else 1.0
 	# 水平速度上限：至少达到图构建假设（BUILD_MOVE_SPEED），再乘 AI 跳跃加成
-	var vmax: float = maxf(move_speed * speed_mult, BUILD_MOVE_SPEED) * AI_JUMP_BONUS
+	# （地狱再乘水平放宽倍率，保证图中判可达的跳跃执行也够得着）
+	var vmax: float = maxf(move_speed * speed_mult, BUILD_MOVE_SPEED) * AI_JUMP_BONUS * horiz_mult
 
 	# 已在目标平台 x 范围内 → 直接执行（上方/同高垂直跳，下方自然下落）
 	if ai_cx >= next_l and ai_cx <= next_r and f.grounded:
@@ -227,7 +236,7 @@ static func _follow_path_step(f, ai_plat, next_plat, move_speed: float, dir_to_t
 ## 起跳：vy=-JUMP_VY。起跳帧 vx 置 0（地面物理会把小速度清零），空中保持 air_vx
 static func _start_jump(f, air_vx: float, dir: int):
 	f.vx = 0
-	f.vy = -JUMP_VY
+	f.vy = -(NAV_HELL_JUMP_VY if _hell_nav() else JUMP_VY)
 	_jump_commit = true
 	_jump_vx = air_vx
 	_last_vx = air_vx
@@ -274,6 +283,10 @@ static func _ai_on_platform(f, p: Dictionary) -> bool:
 	if absf((f.pos_y + f.h) - p["y"]) > 20: return false
 	return f.pos_x + f.w > p["x"] and f.pos_x < p["x"] + p["w"]
 
+## 当前是否启用地狱放宽导航 [HELL-ENHANCE]（仅 hell；练习模式开启敌人攻击时也按地狱算）
+static func _hell_nav() -> bool:
+	return GameWorld.effective_ai_difficulty() == "hell"
+
 static func _get_reachable_x_interval(plat: Dictionary, target_y: float, move_speed: float) -> Array:
 	# vy 只有两个取值，覆盖区域 = 平台 x 范围 ± vmax*t：
 	#   目标在下方 → 走出边缘自然下落（vy=0 起，重力加速）
@@ -281,14 +294,17 @@ static func _get_reachable_x_interval(plat: Dictionary, target_y: float, move_sp
 	# 水平速度 v 可在 0..move_speed 内任意取值，落点可在区间内任意选择
 	var a_l = plat["x"]; var a_r = plat["x"] + plat["w"]; var a_y = plat["y"]
 	var dy = a_y - target_y  # 正 = 目标在上方
+	# 地狱放宽：更大起跳速度（更高可达）+ 水平范围 ×2
+	var jump_vy: float = NAV_HELL_JUMP_VY if _hell_nav() else JUMP_VY
+	var horiz_mult: float = NAV_HELL_HORIZ_MULT if _hell_nav() else 1.0
 	var t := 0.0
 	if dy < 0.0:
 		t = sqrt(2.0 * (target_y - a_y) / GRAVITY)
 	else:
-		var disc = JUMP_VY * JUMP_VY - 2.0 * GRAVITY * dy
+		var disc = jump_vy * jump_vy - 2.0 * GRAVITY * dy
 		if disc < 0: return []  # 目标过高
-		t = (JUMP_VY + sqrt(disc)) / GRAVITY
-	return [a_l - move_speed * t, a_r + move_speed * t]
+		t = (jump_vy + sqrt(disc)) / GRAVITY
+	return [a_l - move_speed * t * horiz_mult, a_r + move_speed * t * horiz_mult]
 
 static func _is_platform_reachable(from_plat: Dictionary, to_plat: Dictionary, move_speed: float) -> bool:
 	if from_plat.get("terrain_type", -1) == 3 or to_plat.get("terrain_type", -1) == 3: return false

@@ -33,6 +33,7 @@ class FrameData:
 var frames: Array[FrameData] = []
 var total_duration: float = 0.0
 var loop: bool = false
+var content_h_ref: int = 0  # 锚点参考内容高度（各帧 content_h 的中位数）：渲染统一缩放基准，避免逐帧归一化导致大小抖动
 
 # Runtime state
 var _timer: float = 0.0
@@ -85,6 +86,7 @@ static func load_from_frames(dir_path: String, prefix: String, frame_specs: Arra
 	
 	print("[FrameAnimation] Loaded ", loaded_count, "/", frame_specs.size(), " frames from ", dir_path)
 	anim._calc_total_duration()
+	anim._calc_content_h_ref()
 	return anim
 
 ## 从精灵图集（sprite sheet）加载动画 —— 只加载一张大纹理，每帧用 AtlasTexture 切分
@@ -135,6 +137,7 @@ static func load_from_sprite_sheet(
 
 	print("[FrameAnimation] Loaded ", loaded_count, "/", frame_count, " frames from sprite sheet ", sheet_path)
 	anim._calc_total_duration()
+	anim._calc_content_h_ref()
 	return anim
 
 ## 从精灵图集加载跳跃动画：前 N-1 帧为起跳（合计 takeoff_seconds 秒），最后一帧为滞空保持。
@@ -179,6 +182,7 @@ static func load_jump_sheet(
 			anchor.get("content_h", 0),
 		)
 	anim._calc_total_duration()
+	anim._calc_content_h_ref()
 	return anim
 
 func add_frame(
@@ -196,6 +200,18 @@ func _calc_total_duration():
 	total_duration = 0.0
 	for f in frames:
 		total_duration += f.duration_seconds
+
+## 计算锚点参考内容高度：各帧 content_h 的中位数（忽略 0/无锚点帧）
+func _calc_content_h_ref():
+	var vals: Array = []
+	for f in frames:
+		if f.content_h > 0:
+			vals.append(f.content_h)
+	if vals.is_empty():
+		content_h_ref = 0
+		return
+	vals.sort()
+	content_h_ref = vals[vals.size() / 2]
 
 ## 播放。resume=true 时若动画已在播放则保持当前帧位置继续（循环动画切状态不跳帧）
 func play(resume: bool = false):
@@ -314,6 +330,13 @@ func get_current_content_size() -> Vector2i:
 ## 当前帧索引（0 起）
 func get_current_index() -> int:
 	return _current_index
+
+## 直接跳到指定帧（供滞空循环等自定义帧控制），并把帧内计时清零
+func set_frame_index(idx: int) -> void:
+	if frames.is_empty():
+		return
+	_current_index = clampi(idx, 0, frames.size() - 1)
+	_timer = 0.0
 
 ## 当前帧时长（秒）
 func get_current_duration() -> float:

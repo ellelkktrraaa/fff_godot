@@ -16,12 +16,22 @@ var keys := {
 	"left": false, "right": false, "up": false, "down": false,
 	"attack": false, "skill1": false, "skill2": false, "ult": false, "sub": false,
 	"talent1": false, "talent2": false, "talent3": false,
+	"space": false,  # 练习模式：按住空格 + 其他按键 = 控制对手角色
 }
 
-# Fixed timestep
+# Fixed timestep 固定时间步
 const FIXED_DT := 1000.0 / 60.0
 var _last_time := 0.0
 var _accumulator := 0.0
+
+# 战斗镜头拉近（_process 每渲染帧推进，不受时缓减慢影响）
+const CAM_ZOOM_SMOOTH_IN := 0.03    # 拉近时缩放平滑速率（缓慢推近，~90 帧到达 ~94%）
+const CAM_ZOOM_SMOOTH_OUT := 0.12   # 恢复时缩放平滑速率（较快收回）
+# [FX-ENHANCE] 特写快速拉近速率：命中特写 3~4 帧到位（怼脸），恢复仍走 CAM_ZOOM_SMOOTH_OUT
+const CAM_ZOOM_SMOOTH_IN_FAST := 0.30
+const CAM_ZOOM_POS_LERP := 0.08     # 拉近期间镜头位置每帧趋近目标的比例（60fps 平滑）
+const CAM_ZOOM_Y_BIAS := 24.0       # 拉近居中屏幕向下偏移（px）：人形角色头/胸视觉重心在
+									# 几何中心上方，需下移才能让视线焦点居中
 
 # AI
 var ai_think_delay := 0
@@ -38,6 +48,12 @@ var _pending_load_paths: Array = []
 # 当前地图实例
 var _current_map: Node2D = null
 
+# ── 练习模式 HUD（顶部开关 + 技能介绍面板）──
+var _practice_btns: Dictionary = {}   # key -> Button
+var _practice_bar: Control = null
+var _intro_overlay: Control = null
+var _intro_text: Label = null
+
 # ── 通用开场动画 ──
 static var _intro_loaded := false
 static var INTRO_F1: Texture2D = null
@@ -45,7 +61,9 @@ static var INTRO_F2: Texture2D = null
 static var INTRO_F3: Texture2D = null
 static var INTRO_F4: Texture2D = null
 static var INTRO_FRAMES: Array[Texture2D] = []
-const INTRO_FRAME_DUR := 60  # 每帧绘制次数（60次=1秒@60fps）
+const INTRO_FRAME_DUR := 60  # 默认每帧时长（60次=1秒@60fps）
+var _intro_durs: Array[int] = []   # 每帧时长（帧数）；角色自定义登场动画可覆盖
+var _intro_total := 0              # 开场总时长（帧）
 var _intro_timer := -1
 
 func _ready():
@@ -61,13 +79,18 @@ func _ready():
 	continue_btn.pressed.connect(_toggle_pause)
 	menu_btn.pressed.connect(_back_to_menu)
 	exit_btn.pressed.connect(_exit_game)
-	
+
+	# 练习模式：顶部开关按钮 + 技能介绍面板
+	if GameWorld.practice_mode:
+		_build_practice_hud()
+
 	call_deferred("_start_game")
 
 func _start_game():
 	var ai_char = GameWorld.selected_ai_char_id
 	if ai_char == "":
-		var enemy_chars = CharacterFactory.get_all_char_ids()
+		# 随机敌人只从可选角色中选（排除隐藏形态如黑法师）
+		var enemy_chars = CharacterFactory.get_visible_char_ids()
 		ai_char = enemy_chars[randi() % enemy_chars.size()]
 	print("Starting game: player=", GameWorld.selected_char_id, " enemy=", ai_char)
 	# ── 玩家天赋：使用主菜单选择（若无选择则用默认测试集）──
@@ -122,6 +145,7 @@ func init_game(player_char_id: String, enemy_char_id: String):
 	_start_intro()
 	# 战斗镜头拉近
 	self.scale = Vector2(1.375, 1.375)
+	# 战斗 BGM 在开场动画播完后由 _update() 触发
 	print("Game initialized! player.hp=", GameWorld.player.hp, " enemy.hp=", GameWorld.enemy.hp)
 
 ## 清除上一局残留的角色实例：解除注入 → 释放节点 → 置空全局引用
@@ -142,29 +166,43 @@ func _clear_old_fighters():
 # ── 通用开场动画 ──
 
 ## 启动开场动画：注册全屏绘制回调 + 时停，播完自动解除
+## 优先使用玩家角色的自定义登场动画（CharacterFactory.get_intro），否则用通用开场
 func _start_intro():
-	if not _intro_loaded:
-		INTRO_F1 = load("res://assets/battle_intro/intro_f1.png")
-		INTRO_F2 = load("res://assets/battle_intro/intro_f2.png")
-		INTRO_F3 = load("res://assets/battle_intro/intro_f3.png")
-		INTRO_F4 = load("res://assets/battle_intro/intro_f4.png")
-		INTRO_FRAMES = [INTRO_F1, INTRO_F2, INTRO_F3, INTRO_F4]
-		_intro_loaded = true
+	var custom = CharacterFactory.get_intro(GameWorld.selected_char_id)
+	if not custom.is_empty():
+		# 角色自定义登场动画：帧列表 + 每帧时长（角色脚本自治）
+		INTRO_FRAMES.assign(custom["frames"])
+		_intro_durs.assign(custom["durs"])
+	else:
+		if not _intro_loaded:
+			INTRO_F1 = load("res://assets/battle_intro/intro_f1.png")
+			INTRO_F2 = load("res://assets/battle_intro/intro_f2.png")
+			INTRO_F3 = load("res://assets/battle_intro/intro_f3.png")
+			INTRO_F4 = load("res://assets/battle_intro/intro_f4.png")
+			INTRO_FRAMES = [INTRO_F1, INTRO_F2, INTRO_F3, INTRO_F4]
+			_intro_loaded = true
+		_intro_durs.resize(INTRO_FRAMES.size())
+		_intro_durs.fill(INTRO_FRAME_DUR)
+	_intro_total = 0
+	for d in _intro_durs:
+		_intro_total += d
 	_intro_timer = 0
 	GameWorld.register_draw_effect("battle_intro", _draw_intro_cb, 999, true)
-	GameWorld.hit_stop = INTRO_FRAME_DUR * INTRO_FRAMES.size()  # 4秒
+	GameWorld.hit_stop = _intro_total  # 开场期间全冻结
 
 ## 绘制回调入口（签名匹配 draw_effect_callbacks: (font, cam_x, cam_y) -> Array）
+## 只负责渲染；帧推进由 _update()（固定 60Hz 逻辑帧）完成，避免受渲染帧率影响
 func _draw_intro_cb(_font, _cam_x, _cam_y = 0.0) -> Array:
-	if _intro_timer < 0:
+	if _intro_timer < 0 or _intro_durs.is_empty():
 		return []
-	_intro_timer += 1
-	var img_idx = int(_intro_timer / INTRO_FRAME_DUR)
-	if img_idx >= INTRO_FRAMES.size():
-		_intro_timer = -1
-		GameWorld.unregister_draw_effect("battle_intro")
-		return []
-	return [{"type": "tex", "tex": INTRO_FRAMES[img_idx], "rect": Rect2(0, 0, Constants.W, Constants.H), "color": Color.WHITE}]
+	var idx := 0
+	var elapsed := 0
+	for i in range(_intro_durs.size()):
+		elapsed += _intro_durs[i]
+		if _intro_timer < elapsed:
+			idx = i
+			break
+	return [{"type": "tex", "tex": INTRO_FRAMES[idx], "rect": Rect2(0, 0, Constants.W, Constants.H), "color": Color.WHITE}]
 
 ## 根据已加载的平台计算出生位置,确保角色站在地面/平台上
 func _assemble_talents(fighter: Fighter, talent_ids: Array):
@@ -286,6 +324,16 @@ func _load_random_map():
 	print("[Map] 加载 ", GameWorld.platforms.size(), " 个地形块, 地图=", MapManager.get_display_name(map_path))
 
 func _process(_delta: float):
+	# 战斗镜头缩放：基准 1.375x × 拉近倍率。camera_zoom 每渲染帧平滑趋近目标
+	# （拉近慢速、恢复快速），不受时缓减慢影响，避免慢动作下逐帧跳变卡顿
+	# [FX-ENHANCE] 特写快速模式：zoom_is_closeup 时用快速速率 3~4 帧怼脸，否则原慢速蓄力渐变
+	var zoom_smooth: float = CAM_ZOOM_SMOOTH_OUT
+	if GameWorld.camera_zoom_target > 1.0:
+		zoom_smooth = CAM_ZOOM_SMOOTH_IN_FAST if GameWorld.zoom_is_closeup else CAM_ZOOM_SMOOTH_IN
+	GameWorld.camera_zoom = lerpf(GameWorld.camera_zoom, GameWorld.camera_zoom_target, zoom_smooth)
+	if absf(GameWorld.camera_zoom - GameWorld.camera_zoom_target) < 0.001:
+		GameWorld.camera_zoom = GameWorld.camera_zoom_target
+	self.scale = Vector2(GameWorld.CAMERA_BASE_SCALE, GameWorld.CAMERA_BASE_SCALE) * GameWorld.camera_zoom
 	# 异步重开加载中：持续点亮呼吸滤镜，直到后台资源加载完成
 	if _restart_loading:
 		GameWorld.loading_filter_frames = LOADING_FILTER_FRAMES
@@ -293,10 +341,13 @@ func _process(_delta: float):
 	if GameWorld.loading_filter_frames > 0:
 		GameWorld.loading_filter_frames -= 1
 	if not GameWorld.game_running or GameWorld.game_over:
+		# 非运行期间刷新基准时间，避免恢复后一次性补跑造成时间跳跃
+		_last_time = Time.get_ticks_msec()
 		queue_redraw()
 		# Always show UI for game over
 		return
 	if is_paused:
+		_last_time = Time.get_ticks_msec()
 		queue_redraw()
 		return
 	var now = Time.get_ticks_msec()
@@ -311,18 +362,55 @@ func _process(_delta: float):
 		if GameWorld.slow_mo_timer > 0:
 			GameWorld.slow_mo_timer -= 1
 			GameWorld.slow_mo_tick += 1
-			if GameWorld.slow_mo_tick >= GameWorld.SLOW_FACTOR:
+			if GameWorld.slow_mo_tick >= GameWorld.slow_mo_factor:
 				GameWorld.slow_mo_tick = 0
 				_update()
 		else:
 			GameWorld.slow_mo_tick = 0
+			GameWorld.slow_mo_factor = GameWorld.SLOW_FACTOR  # 时缓结束复位默认力度
 			_update()
+		if GameWorld.grayscale_timer > 0:
+			GameWorld.grayscale_timer -= 1
 		_accumulator -= FIXED_DT
+	# 拉近期间：镜头位置每渲染帧直接趋近居中目标（60fps 平滑，不受时缓减慢影响）。
+	# 以角色碰撞盒中心（冲刺时随冲刺方向前移）为拉近中心，角色移动时中心随之移动，
+	# 允许拍到地图外（不做地图边界钳制）
+	if GameWorld.camera_zoom_target > 1.0:
+		var cam_scale: float = GameWorld.CAMERA_BASE_SCALE * GameWorld.camera_zoom
+		# [FX-ENHANCE] 特写焦点可指定：zoom_focus 非空时聚焦该对象中心（null 默认玩家）
+		var focus_obj: Node = GameWorld.zoom_focus if GameWorld.zoom_focus != null else GameWorld.player
+		var hb: Rect2 = focus_obj.get_hit_box()
+		var ccx: float = hb.position.x + hb.size.x / 2.0
+		var ccy: float = hb.position.y + hb.size.y / 2.0
+		var tcam: float = ccx - (Constants.W * 0.5) / cam_scale
+		var tcamy: float = ccy - (Constants.H * 0.5 + CAM_ZOOM_Y_BIAS) / cam_scale
+		GameWorld.camera_vel.x = 0.0
+		GameWorld.camera_vel.y = 0.0
+		GameWorld.camera.x += (tcam - GameWorld.camera.x) * CAM_ZOOM_POS_LERP
+		GameWorld.camera.y += (tcamy - GameWorld.camera.y) * CAM_ZOOM_POS_LERP
 	queue_redraw()
 
 func _update():
+	# 开场动画按固定 60Hz 逻辑帧推进（与渲染帧率无关，保证各设备时长一致）
+	if _intro_timer >= 0:
+		_intro_timer += 1
+		if _intro_timer >= _intro_total:
+			_intro_timer = -1
+			GameWorld.unregister_draw_effect("battle_intro")
+			# 开场动画播放完毕 → 战斗 BGM 开始（两首随机，play_music 幂等，重开时不重复触发）
+			AudioManager.play_music("bgm_battle" if randi() % 2 == 0 else "bgm_battle_alt")
 	if GameWorld.hit_stop > 0:
 		GameWorld.hit_stop -= 1
+		return
+
+	# ── 时停：全冻结（技能冷却/飞行物/buff 持续时间/AI/输入/物理 全部停摆）──
+	# 只推进 大招 overlay 动画（播放时长即时停时长）与 出招者自身的逻辑（保证大招出伤）
+	if GameWorld.is_time_stopped():
+		if GameWorld.time_stop_timer > 0:
+			GameWorld.time_stop_timer -= 1
+		CharacterSystems.update_active_overlays()
+		GameWorld.check_time_stop_end()
+		_advance_time_stop_casters()
 		return
 
 	# 角色系统更新先行：让角色向中断器注册计时项
@@ -362,7 +450,11 @@ func _update():
 	# Input & AI (must happen BEFORE physics, so vx/vy from input take effect same frame)
 	InputHandler.update_player_input(GameWorld, keys)
 	InputRouter.handle_talent_keys(keys)
-	ai_think_delay = AISystem.update_ai(ai_think_delay)
+	# 练习模式：空格按住手动控制对手期间，不跑敌方 AI
+	if GameWorld.practice_mode and keys["space"]:
+		ai_think_delay = 0
+	else:
+		ai_think_delay = AISystem.update_ai(ai_think_delay)
 	# Apply physics (after input, matching JS order)
 	_apply_physics_all()
 	if GameWorld.player and GameWorld.player.dashing and GameWorld.player.image_state == "skill1":
@@ -370,6 +462,13 @@ func _update():
 	# 作弊：无限蓝
 	if GameWorld.infinite_energy and GameWorld.player:
 		GameWorld.player.energy = GameWorld.player.max_energy
+	# 练习模式：无限火力（无限能量 + 技能/大招无cd）
+	if GameWorld.practice_mode and GameWorld.practice_infinite_fire and GameWorld.player:
+		GameWorld.player.energy = GameWorld.player.max_energy
+		for sk in GameWorld.player.skills:
+			sk.cd = 0
+	# 练习模式：主动天赋无冷却（放在输入之后，避免激活当帧 HUD 闪一下冷却）
+	GameWorld.practice_clear_talent_cd()
 	# 闪避慢动作：刺客 dodge_slow_mo 期间，跳过敌方实体和投射物更新
 	var dodge_slow_active = false
 	for f in GameWorld.entities:
@@ -393,40 +492,65 @@ func _update():
 	# CharacterFactory.call_rose_trails() 已由 CharacterSystems.update_characters() 在帧首调用，不再重复
 	CharacterFactory.call_global_update("evoker")
 	CharacterFactory.call_global_update("bard")
-	# Camera — 面向方向占3/5屏幕，钳制防止拍到地图以外
+	# Camera — 面向方向占3/5屏幕，钳制防止拍到地图以外。
+	# 拉近期间镜头位置由 _process 每渲染帧驱动（不受时缓减慢影响），这里只跑常规取景弹簧
 	const CAM_STIFFNESS := 0.015
 	const CAM_FRICTION := 0.88
-	var cam_offset = Constants.W * 0.275 if GameWorld.player.facing > 0 else Constants.W * 0.475
-	var target_cam = GameWorld.player.pos_x - cam_offset
-	# 屏幕抖动
+	if GameWorld.camera_zoom_target <= 1.0:
+		var cam_offset = Constants.W * 0.275 if GameWorld.player.facing > 0 else Constants.W * 0.475
+		var target_cam = GameWorld.player.pos_x - cam_offset
+		# 视野受战斗缩放影响：实际可见宽 = W / scale（scale=CAMERA_BASE_SCALE×zoom），
+		# clamp 上限需相应放大，否则按未缩放视口算会拍不到地图右端
+		var view_w: float = Constants.W / maxf(GameWorld.CAMERA_BASE_SCALE * GameWorld.camera_zoom, 0.1)
+		target_cam = clampf(target_cam, 0.0, Constants.MAP_W - view_w)
+		# Camera Y — 以角色为中心，地面以下可以照一点
+		var target_cam_y = GameWorld.player.pos_y - Constants.H / 2.0
+		target_cam_y = clampf(target_cam_y, -30.0, 80.0)
+		GameWorld.camera_vel.x += (target_cam - GameWorld.camera.x) * CAM_STIFFNESS
+		GameWorld.camera_vel.x *= CAM_FRICTION
+		GameWorld.camera.x += GameWorld.camera_vel.x
+		GameWorld.camera_vel.y += (target_cam_y - GameWorld.camera.y) * CAM_STIFFNESS
+		GameWorld.camera_vel.y *= CAM_FRICTION
+		GameWorld.camera.y += GameWorld.camera_vel.y
+	# 屏幕抖动：直接叠加高频随机偏移（X/Y 双轴同震，绕过弹簧保持高频）
+	# [FX-ENHANCE] 强度每帧指数衰减（×0.88）：从强到弱自然消退，结束无"戛然而止"感
 	if GameWorld.screen_shake_duration > 0:
 		GameWorld.screen_shake_duration -= 1
-		target_cam += randf_range(-GameWorld.screen_shake_intensity, GameWorld.screen_shake_intensity)
-	target_cam = clampf(target_cam, 0.0, Constants.MAP_W - Constants.W)
-	# 弹簧力 → 速度 → 摩擦力 → 位置
-	GameWorld.camera_vel.x += (target_cam - GameWorld.camera.x) * CAM_STIFFNESS
-	GameWorld.camera_vel.x *= CAM_FRICTION
-	GameWorld.camera.x += GameWorld.camera_vel.x
-	
-	# Camera Y — 以角色为中心，地面以下可以照一点
-	var target_cam_y = GameWorld.player.pos_y - Constants.H / 2.0
-	target_cam_y = clampf(target_cam_y, -30.0, 80.0)
-	GameWorld.camera_vel.y += (target_cam_y - GameWorld.camera.y) * CAM_STIFFNESS
-	GameWorld.camera_vel.y *= CAM_FRICTION
-	GameWorld.camera.y += GameWorld.camera_vel.y
+		var shk = GameWorld.screen_shake_intensity
+		GameWorld.camera.x += randf_range(-shk, shk)
+		GameWorld.camera.y += randf_range(-shk, shk) * 0.7
+		GameWorld.screen_shake_intensity *= 0.88  # 指数衰减（0.88 可调，0.82~0.9 区间）
+		if GameWorld.screen_shake_intensity < 0.5:
+			GameWorld.screen_shake_duration = 0  # 强度近零直接收尾，避免低频残留
 	# 地图贴图同步镜头偏移
 	if _current_map:
 		_current_map.position = Vector2(-GameWorld.camera.x, -GameWorld.camera.y)
 
-func _apply_physics_all():
-	# Time stop check — skip physics if any entity has time_stop active
-	var time_stopped = false
+## 时停期间：只推进出招者（state=ult / time_stop 标记 / 拥有 "_ult" 大招 overlay）的 update_systems，
+## 保证大招出伤与演出状态在时停中照常推进；其余实体全部冻结
+func _advance_time_stop_casters():
 	for f in GameWorld.entities:
-		if not is_instance_valid(f):
+		if not is_instance_valid(f) or f.hp <= 0:
 			continue
-		if f.state_flags.get("time_stop", false):
-			time_stopped = true
-			break
+		var is_caster: bool = f.state == "ult" or f.state_flags.get("time_stop", false)
+		if not is_caster:
+			for ov in GameWorld.active_overlays:
+				if str(ov.get("overlay_id", "")).ends_with("_ult") and ov.get("owner") == f:
+					is_caster = true
+					break
+		if is_caster:
+			CharacterFactory.update_char_systems(f)
+
+func _apply_physics_all():
+	# Time stop check — 全局 trigger_time_stop 或 任一实体 time_stop（角色大招）激活时跳过物理
+	var time_stopped = GameWorld.time_stop_timer > 0
+	if not time_stopped:
+		for f in GameWorld.entities:
+			if not is_instance_valid(f):
+				continue
+			if f.state_flags.get("time_stop", false):
+				time_stopped = true
+				break
 	if not time_stopped:
 		for f in GameWorld.entities:
 			if is_instance_valid(f):
@@ -576,6 +700,11 @@ func _restart_game():
 func _toggle_pause():
 	is_paused = not is_paused
 	pause_menu.visible = is_paused
+	# 练习模式 HUD（顶部开关栏 + 技能介绍面板）暂停期间隐藏，避免盖住暂停菜单
+	if _practice_bar:
+		_practice_bar.visible = not is_paused
+	if _intro_overlay:
+		_intro_overlay.visible = not is_paused and GameWorld.practice_skill_intro
 	# Hide/show touch controls with pause state
 	if touch_controls:
 		touch_controls.visible = not is_paused
@@ -662,3 +791,232 @@ func _style_pause_button(btn: Button, accent: Color):
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	btn.add_theme_color_override("font_color", accent)
+
+# ===== 练习模式 =====
+
+## 构建练习模式 HUD：顶部居中的 4 个开关按钮 + 技能介绍面板
+## （技能介绍面板先加入 UILayer，按钮栏后加入，保证按钮绘制在面板之上仍可点击）
+func _build_practice_hud():
+	_build_skill_intro_panel()
+	var bar = HBoxContainer.new()
+	bar.name = "PracticeBar"
+	bar.add_theme_constant_override("separation", 8)
+	bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bar.offset_top = 6
+	bar.offset_bottom = 40
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	ui_layer.add_child(bar)
+	_practice_bar = bar
+	var defs := [
+		{"key": "infinite_fire", "label": "无限火力"},
+		{"key": "damage", "label": "伤害显示"},
+		{"key": "enemy_ai", "label": "敌人攻击"},
+		{"key": "intro", "label": "技能介绍"},
+	]
+	for d in defs:
+		var btn = Button.new()
+		btn.name = "PracticeBtn_" + d.key
+		btn.text = d.label
+		btn.custom_minimum_size = Vector2(96, 30)
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.pressed.connect(_on_practice_toggle.bind(d.key, btn))
+		bar.add_child(btn)
+		_practice_btns[d.key] = btn
+		_style_practice_btn(btn, _practice_toggle_on(d.key))
+
+func _practice_toggle_on(key: String) -> bool:
+	match key:
+		"infinite_fire": return GameWorld.practice_infinite_fire
+		"damage": return GameWorld.practice_damage_display
+		"enemy_ai": return GameWorld.practice_enemy_ai
+		"intro": return GameWorld.practice_skill_intro
+	return false
+
+## 开关点击：点一下开启，再点一下关闭
+func _on_practice_toggle(key: String, btn: Button):
+	match key:
+		"infinite_fire": GameWorld.practice_infinite_fire = not GameWorld.practice_infinite_fire
+		"damage": GameWorld.practice_damage_display = not GameWorld.practice_damage_display
+		"enemy_ai": GameWorld.practice_enemy_ai = not GameWorld.practice_enemy_ai
+		"intro": GameWorld.practice_skill_intro = not GameWorld.practice_skill_intro
+	_style_practice_btn(btn, _practice_toggle_on(key))
+	if key == "intro":
+		if GameWorld.practice_skill_intro:
+			_populate_skill_intro()
+		if _intro_overlay:
+			_intro_overlay.visible = GameWorld.practice_skill_intro
+
+func _style_practice_btn(btn: Button, active: bool):
+	var normal = StyleBoxFlat.new()
+	normal.set_corner_radius_all(8)
+	normal.border_width_left = 2; normal.border_width_right = 2
+	normal.border_width_top = 2; normal.border_width_bottom = 2
+	if active:
+		normal.bg_color = Color(1.0, 0.843, 0.0, 0.35)
+		normal.border_color = Color(1.0, 0.843, 0.0, 0.9)
+		btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	else:
+		normal.bg_color = Color(0.1, 0.1, 0.15, 0.6)
+		normal.border_color = Color(0.4, 0.4, 0.5, 0.5)
+		btn.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	btn.add_theme_stylebox_override("normal", normal)
+	var hover = normal.duplicate()
+	hover.bg_color = Color(1.0, 0.843, 0.0, 0.25)
+	hover.border_color = Color(1.0, 0.843, 0.0, 0.7)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", normal)
+	btn.add_theme_stylebox_override("focus", normal)
+
+## 技能介绍面板：全屏半透明遮罩 + 居中可滚动文本
+func _build_skill_intro_panel():
+	_intro_overlay = ColorRect.new()
+	_intro_overlay.name = "SkillIntroOverlay"
+	_intro_overlay.color = Color(0.02, 0.02, 0.06, 0.82)
+	_intro_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_intro_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_intro_overlay.visible = false
+	ui_layer.add_child(_intro_overlay)
+
+	var panel = PanelContainer.new()
+	panel.name = "SkillIntroPanel"
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -300
+	panel.offset_top = -190
+	panel.offset_right = 300
+	panel.offset_bottom = 190
+	_intro_overlay.add_child(panel)
+
+	var pstyle = StyleBoxFlat.new()
+	pstyle.bg_color = Color(0.08, 0.08, 0.12, 0.98)
+	pstyle.set_corner_radius_all(12)
+	pstyle.border_width_left = 2; pstyle.border_width_right = 2
+	pstyle.border_width_top = 2; pstyle.border_width_bottom = 2
+	pstyle.border_color = Color(1.0, 0.843, 0.0, 0.5)
+	panel.add_theme_stylebox_override("panel", pstyle)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	panel.add_child(vbox)
+
+	var header = HBoxContainer.new()
+	var title = Label.new()
+	title.text = "📖 技能介绍"
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(1.0, 0.843, 0.0))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_btn = Button.new()
+	close_btn.text = "✕ 关闭"
+	close_btn.add_theme_font_size_override("font_size", 14)
+	close_btn.add_theme_color_override("font_color", Color(0.914, 0.271, 0.157))
+	close_btn.pressed.connect(_close_skill_intro)
+	header.add_child(close_btn)
+	vbox.add_child(header)
+
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# 图鉴规范：只保留竖向滚动，禁用横向滚动
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
+	_intro_text = Label.new()
+	_intro_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_intro_text.add_theme_font_size_override("font_size", 13)
+	_intro_text.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92))
+	_intro_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_intro_text)
+
+func _close_skill_intro():
+	GameWorld.practice_skill_intro = false
+	if _intro_overlay:
+		_intro_overlay.visible = false
+	var btn = _practice_btns.get("intro")
+	if btn:
+		_style_practice_btn(btn, false)
+
+## 填充技能介绍内容：普攻 / 技能一·二·三 / 大招 / 特殊机制 / 天赋
+func _populate_skill_intro():
+	var p = GameWorld.player
+	if not is_instance_valid(p):
+		return
+	var cfg = CharConfigs.configs.get(p.char_id, {})
+	var dex = cfg.get("dex", {})
+	var lines: Array[String] = []
+	lines.append("【" + CharConfigs.get_char_name(p.char_id) + "】")
+	var sections := _classify_dex_skills(dex.get("skills", []))
+	if sections.has("attack"):
+		lines.append("")
+		lines.append("【普攻】" + sections["attack"].get("name", ""))
+		lines.append(sections["attack"].get("desc", ""))
+		lines.append(sections["attack"].get("meta", ""))
+	var skill_labels := {"skill1": "技能一", "skill2": "技能二", "skill3": "技能三"}
+	for key in ["skill1", "skill2", "skill3"]:
+		if sections.has(key):
+			lines.append("")
+			lines.append("【" + skill_labels[key] + "】" + sections[key].get("name", ""))
+			lines.append(sections[key].get("desc", ""))
+			lines.append(sections[key].get("meta", ""))
+	if sections.has("ult"):
+		lines.append("")
+		lines.append("【大招】" + sections["ult"].get("name", ""))
+		lines.append(sections["ult"].get("desc", ""))
+		lines.append(sections["ult"].get("meta", ""))
+	# 特殊机制：未分类的技能条目 + 图鉴 stats
+	var special: Array = sections.get("special", [])
+	var stats: Array = dex.get("stats", [])
+	if not special.is_empty() or not stats.is_empty():
+		lines.append("")
+		lines.append("【特殊机制】")
+		for s in special:
+			lines.append("✦ " + s.get("name", "") + "：" + s.get("desc", ""))
+		for s in stats:
+			lines.append("✦ " + s.get("label", "") + "：" + s.get("value", ""))
+	# 天赋
+	if not GameWorld.player_talents.is_empty():
+		lines.append("")
+		lines.append("【天赋】")
+		for tid in GameWorld.player_talents:
+			var meta = TalentPool.get_metadata(tid)
+			if meta.is_empty():
+				continue
+			lines.append("✦ " + meta.get("name", tid))
+			lines.append(meta.get("desc", ""))
+	if _intro_text:
+		_intro_text.text = "\n".join(lines)
+
+## 将 dex.skills 分类为 普攻/技能一·二·三/大招/特殊机制。
+## 带关键词（普攻/技能一/大招等）的直接归类；无关键词的按顺序补位，剩余归特殊机制。
+func _classify_dex_skills(dex_skills: Array) -> Dictionary:
+	var result := {}
+	var unmatched: Array = []
+	for s in dex_skills:
+		var name: String = s.get("name", "")
+		var section := ""
+		if "普通攻击" in name or "普攻" in name:
+			section = "attack"
+		elif "技能一" in name or "一技能" in name:
+			section = "skill1"
+		elif "技能二" in name or "二技能" in name:
+			section = "skill2"
+		elif "技能三" in name or "三技能" in name:
+			section = "skill3"
+		elif "大招" in name:
+			section = "ult"
+		else:
+			unmatched.append(s)
+			continue
+		result[section] = s
+	var slots: Array = ["attack", "skill1", "skill2", "ult"]
+	for s in unmatched:
+		var filled := false
+		for slot in slots:
+			if not result.has(slot):
+				result[slot] = s
+				filled = true
+				break
+		if not filled:
+			if not result.has("special"):
+				result["special"] = []
+			result["special"].append(s)
+	return result

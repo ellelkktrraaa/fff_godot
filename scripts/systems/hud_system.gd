@@ -7,11 +7,12 @@ class_name HudSystem
 static func draw(game_node: CanvasItem, font: Font):
 	if not is_instance_valid(GameWorld.player) or not is_instance_valid(GameWorld.enemy):
 		return
-	_draw_player_bars(game_node, font)
+	var player_bars_bottom := _draw_player_bars(game_node, font)
 	_draw_enemy_bars(game_node, font)
 	_draw_difficulty_badge(game_node, font)
 	_draw_skill_cooldowns(game_node, font)
 	_draw_talent_buttons(game_node, font)
+	_draw_practice_hud(game_node, font, player_bars_bottom)
 	_draw_game_over(game_node, font)
 	_draw_loading_filter(game_node)  # 最后绘制，盖住整个画面
 
@@ -65,7 +66,7 @@ static func draw_charge_bar(game_node: CanvasItem, owner: Fighter, cam_x: float,
 
 # ===== 内部方法 =====
 
-static func _draw_player_bars(game_node: CanvasItem, font: Font):
+static func _draw_player_bars(game_node: CanvasItem, font: Font) -> float:
 	var p = GameWorld.player
 	var bar_x = 16
 	var bar_w = 170.0
@@ -114,6 +115,8 @@ static func _draw_player_bars(game_node: CanvasItem, font: Font):
 					var txt = lbl + " " + str(int(v))
 					game_node.draw_string(font, Vector2(bar_x + 52, hud_y), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 7, d.get("label_color", Color(1, 1, 1)))
 				hud_y += hud_h + hud_spacing
+	# 返回能量条下方组件条之后的第一个空闲 y（练习模式伤害显示在其下方绘制）
+	return hud_y
 
 static func _draw_enemy_bars(game_node: CanvasItem, font: Font):
 	var e = GameWorld.enemy
@@ -139,6 +142,9 @@ static func _draw_enemy_bars(game_node: CanvasItem, font: Font):
 	game_node.draw_string(font, Vector2(e_bar_x + bar_w - 4, 20), str(int(e.energy)), HORIZONTAL_ALIGNMENT_RIGHT, -1, 8, Color(1.0, 0.667, 0.4))
 
 static func _draw_difficulty_badge(game_node: CanvasItem, font: Font):
+	# 练习模式：无难度选择，顶部让位给练习开关按钮
+	if GameWorld.practice_mode:
+		return
 	var diff_label = GameWorld.difficulty.to_upper()
 	var diff_color = Color(0.667, 0.667, 0.667)
 	if GameWorld.difficulty == "hell":
@@ -151,19 +157,57 @@ static func _draw_difficulty_badge(game_node: CanvasItem, font: Font):
 		diff_color = Color(0.4, 1.0, 0.4)
 	game_node.draw_string(font, Vector2(Constants.W / 2.0, 6), "【" + diff_label + "】", HORIZONTAL_ALIGNMENT_CENTER, -1, 12, diff_color)
 
+## 练习模式 HUD：伤害显示固定在镜头左侧、角色能量条下方（屏幕坐标，随镜头保持画面内）
+## bar_y 为玩家 HP/能量/组件条下方第一个空闲 y（由 _draw_player_bars 返回）
+static func _draw_practice_hud(game_node: CanvasItem, font: Font, bar_y: float = 30.0):
+	if not GameWorld.practice_mode or not GameWorld.practice_damage_display:
+		return
+	# 15 秒（900 帧）未造成伤害 → 清零
+	if GameWorld.practice_damage_dealt > 0 \
+			and GameWorld.frame - GameWorld.practice_damage_last_frame >= 15 * 60:
+		GameWorld.practice_damage_dealt = 0.0
+	var bar_x = 16.0
+	var bar_w = 170.0
+	# 与 HP/能量条一致的深色底块
+	game_node.draw_rect(Rect2(bar_x, bar_y, bar_w, 22), Color(0.05, 0.05, 0.08, 0.85))
+	game_node.draw_string(font, Vector2(bar_x + 4, bar_y + 11), "累计伤害", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.75, 0.75, 0.85))
+	game_node.draw_string(font, Vector2(bar_x + bar_w - 4, bar_y + 11), str(int(GameWorld.practice_damage_dealt)),
+		HORIZONTAL_ALIGNMENT_RIGHT, -1, 12, Color(1.0, 0.84, 0.3))
+	# 清零倒计时（仅在有累计伤害时）
+	if GameWorld.practice_damage_dealt > 0:
+		var remain := 15.0 - float(GameWorld.frame - GameWorld.practice_damage_last_frame) / 60.0
+		game_node.draw_string(font, Vector2(bar_x + 4, bar_y + 20), "%.1fs 无伤害将清零" % maxf(remain, 0.0),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.65, 0.65, 0.75))
+
+## 玩家实际拥有的技能键（缺失的技能不显示按钮，如非狂战士的 sub/战吼）
+static func _player_skill_keys(p: Fighter) -> Array:
+	var keys: Array = []
+	for key in ["attack", "skill1", "skill2", "ult", "sub"]:
+		if p.get_skill(key) != null:
+			keys.append(key)
+	return keys
+
 static func _draw_skill_cooldowns(game_node: CanvasItem, font: Font):
 	var p = GameWorld.player
 	var default_labels = {"attack": "J 普攻", "skill1": "U 技1", "skill2": "I 技2", "ult": "O 大招", "sub": "7 战吼"}
 	var skill_labels = p.hud_skill_labels if not p.hud_skill_labels.is_empty() else default_labels
-	var btn_x_start = (Constants.W - 5 * 60) / 2.0
-	var skill_keys = ["attack", "skill1", "skill2", "ult", "sub"]
+	# 只显示角色实际拥有的技能按钮（如非狂战士没有 sub/战吼）
+	var skill_keys = _player_skill_keys(p)
+	var btn_x_start = (Constants.W - skill_keys.size() * 60) / 2.0
 	for i in skill_keys.size():
 		var key = skill_keys[i]
 		var sk = p.get_skill(key)
 		var bx = btn_x_start + i * 64
 		var by = Constants.H - 28
 		var awaiting = sk != null and sk.in_next_stage_window()  # 多段技能：等待释放下一段 → 黄标
-		if awaiting:
+		var buffing = sk != null and sk.buff_timer > 0  # 强化/增益状态：技能槽黄条显示剩余时间（如黑法师强化状态）
+		if buffing:
+			# 强化黄条：黄底 + 剩余时间 + 黄边（样式参考多段技能黄标）
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(1.0, 0.84, 0.1, 0.9))
+			game_node.draw_string(font, Vector2(bx + 4, by + 4), skill_labels.get(key, key), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.1, 0.1))
+			game_node.draw_string(font, Vector2(bx + 4, by + 14), "强化 " + str(ceil(sk.buff_timer / 60.0)) + "s", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.15, 0.1, 0.0))
+			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(1.0, 0.7, 0.0), false, 2)
+		elif awaiting:
 			game_node.draw_rect(Rect2(bx, by, 58, 22), Color(1.0, 0.84, 0.1, 0.9))
 			game_node.draw_string(font, Vector2(bx + 4, by + 4), skill_labels.get(key, key), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.1, 0.1))
 			game_node.draw_string(font, Vector2(bx + 4, by + 14), "下一段 " + str(ceil(sk.stage_window / 60.0)) + "s", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.15, 0.1, 0.0))
@@ -181,7 +225,9 @@ static func _draw_talent_buttons(game_node: CanvasItem, font: Font):
 	var p = GameWorld.player
 	if not is_instance_valid(p) or not p.talent_manager or p.talent_slots.is_empty():
 		return
-	var btn_x_start = (Constants.W - 5 * 60) / 2.0 + 5 * 64
+	# 起点与技能按钮行对齐（按实际技能数偏移，非狂战士少一个战吼键）
+	var skill_count = _player_skill_keys(p).size()
+	var btn_x_start = (Constants.W - skill_count * 60) / 2.0 + skill_count * 64
 	var by = Constants.H - 28
 	var _talent_key_labels = ["K", "L", ";"]
 	for i in range(p.talent_slots.size()):

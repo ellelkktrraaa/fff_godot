@@ -16,6 +16,10 @@ static func update_projectiles(game_node: Node):
 				speed_mult = 0.5
 		p["x"] += p["vx"] * speed_mult; p["y"] += p["vy"] * speed_mult; p["life"] -= 1
 
+		# 动画投射物：每帧推进动画帧
+		if p.get("img") is FrameAnimation:
+			p["img"].update(1.0)
+
 		# Gravity: parabolic projectiles
 		if p.has("gravity"): p["vy"] += p["gravity"]
 
@@ -115,11 +119,40 @@ static func update_projectiles(game_node: Node):
 						target.ice_hit_count += 1
 						if target.ice_hit_count >= 2:
 							target.add_status("frozen")
+					# 黑法师凛冬冰棱：破碎动画 + 10% 减速（可叠加）+ 4 颗全部命中 → 冻结 5s
+					if ptype == "bm_ice_crystal":
+						var bm_owner = p["owner"]
+						if bm_owner and bm_owner.components:
+							var bm_comp = bm_owner.components.get_component("black_mage")
+							if bm_comp:
+								bm_comp.crystal_hits += 1
+								BlackMageCharacter.play_crystal_break(p["x"] + p["w"] / 2.0, p["y"] + p["h"] / 2.0)
+								BlackMageCharacter.apply_ice_slow(target)
+								# 4 冰棱全部命中 → 冻结 5s（冻结：不能操作 + 不能击飞/击退）
+								if bm_comp.crystal_hits >= BlackMageCharacter.CRYSTAL_COUNT:
+									target.add_status("frozen")
+									for s in target.statuses:
+										if s.id == "frozen":
+											s.timer = BlackMageCharacter.FREEZE_DURATION
+											s.duration = BlackMageCharacter.FREEZE_DURATION
+											break
+					# 黑法师灰烬火球：命中附加 1/s 灼烧 5s（爆炸在伤害结算后触发，避免击退被覆盖）
+					if ptype == "bm_fireball":
+						target.add_status("bm_burn")
+						var bm_o = p["owner"]
+						if bm_o and bm_o.components:
+							var bm_c = bm_o.components.get_component("black_mage")
+							if bm_c:
+								bm_c.fireball_hits += 1
 					# 冥炎弹命中效果
 					if p.get("type") == "evoker_fireball":
 						target.slow_timer = 360
 						target.slow_percent = 0.2
 						target.burn_timer = 360
+						# 灼烧立刻解除冰冻（火克冰）
+						for s in target.statuses:
+							if s.id == "frozen":
+								s.timer = 0
 					if p.get("isGravity"): target.add_status("gravity_debuff")
 					if p.get("burn"): target.add_status("burn")
 					if p.get("slow"): target.add_status("slow")
@@ -134,16 +167,24 @@ static func update_projectiles(game_node: Node):
 							"damage": 2, "owner": p["owner"]
 						})
 
-					# Damage: mage projectiles have no knockback
+					# Damage: mage projectiles have no knockback（冰棱走默认：正常击退+击飞）
 					if ptype == "mage_fire" or ptype == "mage_ice" or ptype == "mage_light" or ptype == "bard_skill1_wave":
-						Fighter.apply_damage(target, p["damage"], p["owner"], false)
+						Fighter.apply_damage(target, p["damage"], p["owner"], false, Color(1.0, 0.53, 0.27), "hit_enemy", "", 0, int(p.get("priority", -1)))
 					else:
-						Fighter.apply_damage(target, p["damage"], p["owner"])
+						Fighter.apply_damage(target, p["damage"], p["owner"], true, Color(1.0, 0.53, 0.27), "hit_enemy", "", 0, int(p.get("priority", -1)))
 
 					# 命中击飞（狂战士地裂冲击波等）：launch_vy/launch_vx 覆盖默认击退
 					if p.get("launch_vy", 0.0) != 0.0:
 						target.vy = p["launch_vy"]
 						target.vx = p.get("launch_vx", 0.0)
+
+					# 黑法师灰烬：3 个发射火球全部命中 → 爆炸（10 伤 + 击飞 + 少量击退，在伤害结算后设置避免被覆盖）
+					if ptype == "bm_fireball":
+						var bm_o2 = p["owner"]
+						if bm_o2 and bm_o2.components:
+							var bm_c2 = bm_o2.components.get_component("black_mage")
+							if bm_c2 and bm_c2.fireball_hits >= BlackMageCharacter.FIREBALL_COUNT:
+								BlackMageCharacter.fireball_explosion(target, bm_o2)
 
 					# 命中回复能量（骑士强化普攻等）
 					var on_hit_energy = p.get("on_hit_energy", 0)
@@ -173,6 +214,13 @@ static func _reset_casting(p: Dictionary):
 static func _reflect_projectile(p: Dictionary) -> bool:
 	var defender = GameWorld.get_opponent(p["owner"])
 	if not (defender.blocking or defender.state_flags.get("parry_reflect", false)):
+		return false
+	# 招架范围：只在防御者前方的招架范围内反弹（按角色盾牌/招架动画覆盖范围配置 parry_range）
+	var parry_range: float = defender.config.get("parry_range", 48.0)
+	var front_x: float = defender.pos_x + (defender.w if defender.facing == 1 else 0.0)
+	var proj_cx: float = p["x"] + p["w"] / 2.0
+	var dist_in_front: float = (proj_cx - front_x) * (1.0 if defender.facing == 1 else -1.0)
+	if dist_in_front < -8.0 or dist_in_front > parry_range:
 		return false
 	p["vx"] = -p["vx"] * 1.1
 	p["owner"] = defender

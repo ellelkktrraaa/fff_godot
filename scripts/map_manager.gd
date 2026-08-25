@@ -116,7 +116,7 @@ static func is_locked(map_path: String) -> bool:
 			return true
 	return false
 
-const _locked_map_keywords: Array[String] = ["map_03"]  # 地图3 暂未开放
+const _locked_map_keywords: Array[String] = []  # 地图3（断桥）已开放；后续未完成地图在此登记
 
 ## 检查地图是否在池中
 static func is_in_pool(map_path: String) -> bool:
@@ -143,11 +143,10 @@ static func get_display_name(map_path: String) -> String:
 const BG_DIR := "res://assets/battle_bg/"
 
 # 地图关键词 → 背景文件名（精确配对，优先级最高）
+# 断桥(map3)→虚空1 / 天宫(map4)→虚空2；战场(map1)/高塔(map2) 不配对，走下方随机池（在其他背景里随机）
 static var _map_bg_pairs: Dictionary = {
 	"broken_bridge": "bg_void_01.png",
 	"skypalace":   "bg_void_02.png",
-	"battlefield": "bg_fallen_throne.png",
-	"towers":      "bg_divine_ruins.png",
 }
 
 static var _void_bgs: Array = []       # 虚空背景池（未配对时随机）

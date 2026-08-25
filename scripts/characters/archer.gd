@@ -9,6 +9,14 @@ const PROJ_ARROW_ULT = preload("res://assets/fx_arrow_ult.png")
 const PROJ_ARROW_ULT_FIRE = preload("res://assets/fx_arrow_ult_fire.png")
 const ARCHER_ANI_DIR = "res://assets/char_ani/archer/"
 const ARCHER_ULT_FOOT_GAPS = preload("res://data/foot_gaps/archer_ult_foot_gaps.gd")
+const ARCHER_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/archer_jump_foot_gaps.gd")
+const ARCHER_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/archer_attack_foot_gaps.gd")
+const ARCHER_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/archer_idle_foot_gaps.gd")
+const ARCHER_WALK_FOOT_GAPS = preload("res://data/foot_gaps/archer_walk_foot_gaps.gd")
+
+# 蓄力普攻演出
+const FULL_CHARGE_TIME := 2.0    # 满力蓄力时间（秒），2s+ 为满力
+const FULL_CHARGE_ZOOM_INC := 0.3  # 满力时镜头拉近增量（1.0 → 1.3，按蓄力程度渐进）
 
 static func get_config() -> Dictionary:
 	return {
@@ -16,14 +24,15 @@ static func get_config() -> Dictionary:
 		"speed": 2.0, "attack_range": 0, "attack_damage": 0,
 		"attack_cooldown": 0, "attack_delay": 0, "attack_duration": 0,
 		"can_skill_while_attacking": true,
+		"skill_anim_states": ["skill_ult"],  # 技能动画：播放期间锁输入，受击可提前结束
 		"fields": {"arrows":10,"max_arrows":10,"arrow_regen_timer":0,"arrow_regen_rate":480,"fire_arrow_buff":false,"fire_arrow_timer":0,"tracking_buff":false,"tracking_timer":0,"charging_attack":false,"charge_start_time":0},
 		"world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "idle/", "archer_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "walk/", "archer_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "jump/", "archer_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "attack/", "archer_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"ult": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "ult/sheet.png", 3, 2, 6, 3.0, false, _archer_ult_anchors()),
+			"idle": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "idle/sheet.png", 5, 5, 21, 0.1, true, _archer_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "charge/sheet.png", 5, 4, 17, 0.1, true, _archer_walk_anchors()),
+			"jump": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "jump/sheet.png", 4, 4, 16, 0.1, true, _archer_jump_anchors()),
+			"skill_attack": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "attack/sheet.png", 5, 5, 22, 0.1, false, _archer_attack_anchors()),
+			"skill_ult": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "ult/sheet.png", 3, 2, 6, 0.1, false, _archer_ult_anchors()),
 			"charge": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "charge/", "archer_charge_f_", [{"index": 1, "duration": 999.0}], true),
 		},
 		"dex": {
@@ -52,6 +61,58 @@ static func _archer_ult_anchors() -> Array:
 		})
 	return anchors
 
+## 跳跃动画锚点：同 _archer_ult_anchors 写法
+static func _archer_jump_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_FOOT[i],
+			"head_gap": ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_HEAD[i],
+			"center_dx": ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_CENTER[i],
+			"content_w": ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_CONTENT_W[i],
+			"content_h": ARCHER_JUMP_FOOT_GAPS.ARCHER_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## 普攻动画锚点：同 _archer_jump_anchors 写法
+static func _archer_attack_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_FOOT[i],
+			"head_gap": ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_HEAD[i],
+			"center_dx": ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_CENTER[i],
+			"content_w": ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_CONTENT_W[i],
+			"content_h": ARCHER_ATTACK_FOOT_GAPS.ARCHER_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## 待机动画锚点：同 _archer_jump_anchors 写法
+static func _archer_idle_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_FOOT[i],
+			"head_gap": ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_HEAD[i],
+			"center_dx": ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_CENTER[i],
+			"content_w": ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_CONTENT_W[i],
+			"content_h": ARCHER_IDLE_FOOT_GAPS.ARCHER_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## 移动动画锚点：同 _archer_jump_anchors 写法
+static func _archer_walk_anchors() -> Array:
+	var anchors := []
+	for i in range(ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_FOOT[i],
+			"head_gap": ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_HEAD[i],
+			"center_dx": ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_CENTER[i],
+			"content_w": ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_CONTENT_W[i],
+			"content_h": ARCHER_WALK_FOOT_GAPS.ARCHER_WALK_CONTENT_H[i],
+		})
+	return anchors
+
 static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	var mx = 0
 	var comp: ArcherComponent = p.components.get_component("archer") if p.components else null
@@ -63,6 +124,7 @@ static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	if keys.attack and not p.shield_active and arrows > 0 and not p.charging_attack:
 		p.charging_attack = true; p.charge_start_time = Time.get_ticks_msec()
 		p.attacking = true; p.attack_timer = 9999; p.state = "attack"
+		p.set_animation_state("skill_attack")  # 普攻动画开始播放一次；播完定格末帧，蓄力期间不重复
 	if not keys.attack and p.charging_attack:
 		var ct = (Time.get_ticks_msec() - p.charge_start_time) / 1000.0
 		var dmg: float; var cost: float
@@ -71,12 +133,14 @@ static func handle_input(p: Fighter, keys: Dictionary) -> int:
 		else: dmg = 12; cost = 15
 		if p.energy >= cost and comp:
 			p.energy -= cost; comp.arrows -= 1
-			var d = p.facing; var px2 = p.pos_x + (p.w if d == 1 else 0); var py2 = p.pos_y + 30
+			var d = p.facing; var px2 = p.pos_x + (p.w if d == 1 else 0); var py2 = p.pos_y  # 箭矢位置较原 pos_y+30 上移 30 像素
 			var spd = minf(4 + ct * 2, 10)
 			var c = Color(1,0.53,0) if comp.fire_arrow_buff else Color(0.67,0.67,0.67)
 			var arr_img = ArcherCharacter.PROJ_ARROW_FIRE if comp.fire_arrow_buff else ArcherCharacter.PROJ_ARROW
 			var tracking = comp.tracking_buff
 			GameWorld.projectiles.append({"x":px2-16,"y":py2-10,"w":32,"h":20,"vx":spd*d,"vy":0,"life":120,"damage":dmg,"owner":p,"type":"arrow","color":c,"reflected":false,"is_fire":comp.fire_arrow_buff,"tracking":tracking,"trackingTarget":GameWorld.get_opponent(p),"img":arr_img})
+		# 释放后立刻恢复镜头（蓄力渐进拉近结束）
+		GameWorld.restore_camera_zoom()
 		p.charging_attack = false; p.attacking = false; p.state = "idle"
 	if keys.skill1 and not p.shield_active and not p.charging_attack:
 		var s = p.get_skill("skill1"); if s: var r = s.try_use(p); if r.get("success"): keys.skill1 = false
@@ -129,8 +193,34 @@ static func _ult(owner: Fighter) -> Dictionary:
 		var center_x = owner.pos_x + owner.w/2
 		var tx = center_x + cos(angle) * dist
 		var ult_img = PROJ_ARROW_ULT_FIRE if is_fire else PROJ_ARROW_ULT
-		GameWorld.projectiles.append({"x":tx-16,"y":-30-randf()*50,"w":32,"h":20,"vx":(randf()-0.5)*0.5,"vy":3+randf()*2,"life":120,"damage":5,"owner":owner,"type":"arrow_ult","color":Color(0.8,0.53,0.0),"reflected":false,"img":ult_img,"is_fire":is_fire})
+		GameWorld.projectiles.append({"x":tx-16,"y":-30-randf()*50,"w":32,"h":20,"vx":(randf()-0.5)*0.5,"vy":3+randf()*2,"life":120,"damage":5,"owner":owner,"type":"arrow_ult","color":Color(0.8,0.53,0.0),"reflected":false,"img":ult_img,"is_fire":is_fire,"priority":3})
+	owner.set_animation_state("skill_ult")  # 触发大招动画（skill 分支保持，播完由 update_systems 回 idle）
 	return {"success": true}
+
+## 每帧更新：动画帧推进（多帧 sheet 动画需要每帧 update 才能换帧）
+static func update_systems(owner: Fighter):
+	# 蓄力普攻镜头（仅玩家）：按蓄力程度渐进拉近，非蓄力立即恢复
+	if owner.is_player:
+		_update_charge_zoom(owner)
+	# [TEMP-DEBUG] 排查跳跃动画只显示第一帧：jump 状态下每帧输出推进状态（诊断后删除）
+	if owner.image_state == "jump":
+		var a = owner.current_anim
+		print("[DBG-JUMP] frame=", GameWorld.frame, " idx=", (a.get_current_index() if a else -1), "/", (a.frames.size() if a else 0), " timer=", (a._timer if a else -1.0), " playing=", (a.is_playing() if a else false), " loop=", (a.loop if a else false))
+	if owner.current_anim and owner.current_anim.is_playing():
+		owner.current_anim.update(1.0)
+	# 大招动画（非循环）播完自动回到普通状态，避免卡在 ult 姿态
+	if owner.image_state == "skill_ult" and owner.current_anim and owner.current_anim.is_finished():
+		owner.set_animation_state("idle")
+
+## 蓄力普攻镜头拉近（独立函数）：按蓄力程度渐进拉近（0→满力 1.0→1.3，以角色为中心）；
+## 非蓄力（释放/打断/死亡）立即恢复
+static func _update_charge_zoom(owner: Fighter) -> void:
+	if owner.charging_attack:
+		var ct = (Time.get_ticks_msec() - owner.charge_start_time) / 1000.0
+		var prog = clampf(ct / FULL_CHARGE_TIME, 0.0, 1.0)
+		GameWorld.zoom_character_centered(1.0 + FULL_CHARGE_ZOOM_INC * prog)
+	elif GameWorld.camera_zoom != 1.0:
+		GameWorld.restore_camera_zoom()
 
 ## AI 弓箭手射箭：直接创建箭矢投射物，绕过 handle_input 的按键模拟
 static func ai_fire_arrow(owner: Fighter, charge_time: float):
@@ -148,10 +238,16 @@ static func ai_fire_arrow(owner: Fighter, charge_time: float):
 	owner.energy -= cost; comp.arrows -= 1
 	var d = owner.facing
 	var px2 = owner.pos_x + (owner.w if d == 1 else 0)
-	var py2 = owner.pos_y + 30
+	var py2 = owner.pos_y  # 箭矢位置较原 pos_y+30 上移 30 像素
 	var spd = minf(4 + charge_time * 2, 10)
 	var c = Color(1,0.53,0) if comp.fire_arrow_buff else Color(0.67,0.67,0.67)
 	var arr_img = PROJ_ARROW_FIRE if comp.fire_arrow_buff else PROJ_ARROW
 	var tracking = comp.tracking_buff
 	GameWorld.projectiles.append({"x":px2-16,"y":py2-10,"w":32,"h":20,"vx":spd*d,"vy":0,"life":120,"damage":dmg,"owner":owner,"type":"arrow","color":c,"reflected":false,"is_fire":comp.fire_arrow_buff,"tracking":tracking,"trackingTarget":GameWorld.get_opponent(owner),"img":arr_img})
 	owner.charging_attack = false; owner.attacking = false; owner.state = "idle"
+
+## 体系统：弓箭手状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	if f.image_state == "skill_ult":
+		return Fighter.BODY_VAJRA  # 箭雨施放
+	return -1  # 普攻蓄力 = 普攻体

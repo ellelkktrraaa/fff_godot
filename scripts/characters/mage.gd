@@ -44,7 +44,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	var dir = owner.facing
 	var px = owner.pos_x + (owner.w if dir==1 else 0)
 	var py = owner.pos_y + 30
-	GameWorld.projectiles.append({"x":px-16,"y":py-12,"w":32,"h":24,"vx":4*dir,"vy":0,"life":150,"damage":7,"owner":owner,"type":"mage_ice","color":Color(0.4,0.8,1.0),"reflected":false,"slow":true,"img":PROJ_ICE})
+	GameWorld.projectiles.append({"x":px-16,"y":py-12,"w":32,"h":24,"vx":4*dir,"vy":0,"life":150,"damage":7,"owner":owner,"type":"mage_ice","color":Color(0.4,0.8,1.0),"reflected":false,"slow":true,"img":PROJ_ICE,"priority":1})
 	Fighter.emit_particles(px, py, 25, Color(0.4,0.8,1.0), 4, 6, "star")
 	return {"success": true}
 
@@ -119,3 +119,11 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	Fighter.apply_movement(owner, mx, 2.25)
 	Fighter.update_state(owner, mx)
 	return mx
+
+## 体系统：法师状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	if f.charging:
+		return Fighter.BODY_VAJRA  # 光波蓄力 = 大招释放
+	if f.shield_active:
+		return Fighter.BODY_SKILL  # 护罩 = 防御类技能体
+	return -1

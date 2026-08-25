@@ -4,10 +4,14 @@ class_name KnightCharacter
 const KNIGHT_ANI_DIR = "res://assets/char_ani/knight/"
 const KNIGHT_FOOT_GAPS = preload("res://data/foot_gaps/knight_attack_foot_gaps.gd")
 const KNIGHT_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/knight_skill2_foot_gaps.gd")
+const KNIGHT_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/knight_idle_foot_gaps.gd")
+const KNIGHT_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/knight_jump_foot_gaps.gd")
+const KNIGHT_WALK_FOOT_GAPS = preload("res://data/foot_gaps/knight_walk_foot_gaps.gd")
+const KNIGHT_SKILL1_CHARGE_FOOT_GAPS = preload("res://data/foot_gaps/knight_skill1_charge_foot_gaps.gd")
+const KNIGHT_SKILL1_RELEASE_FOOT_GAPS = preload("res://data/foot_gaps/knight_skill1_release_foot_gaps.gd")
 const PROJ_RENDING = preload("res://assets/fx_knight_rending_wave.png")       # 裂空牙剑气（强化普攻）
 const CHAR_ENHANCED_ATK = preload("res://assets/fx_knight_enhanced_rending.png")  # 强化普攻/蓄力结束角色贴图
 const PROJ_RENDING_SKILL2 = preload("res://assets/fx_knight_rending_skill2.png")  # 二技能裂空剑气
-const CHAR_CHARGE = preload("res://assets/fx_knight_charge.png")                  # 蓄力中角色贴图
 const PROJ_HALF_MOON = preload("res://assets/fx_knight_half_moon.png")            # 半月斩剑气
 
 # 技能二：不屈回响 — 招架
@@ -32,20 +36,23 @@ const SKILL1_BASE_W := 90               # 剑气基础宽度（1.5倍原始）
 const SKILL1_BASE_H := 45               # 剑气基础高度（1.5倍原始）
 const SKILL1_FLY_SPD := 6.0             # 飞行速度
 const SKILL1_FLY_DIST := 400            # 飞行距离（像素）
+const SKILL1_RELEASE_SHAKE := 8.0       # 蓄力>1s 释放时的屏幕震动强度（中等偏轻）
+const SKILL1_RELEASE_SHAKE_DUR := 12    # 蓄力>1s 释放时的屏幕震动持续帧数
 
 static func get_config() -> Dictionary:
 	return {
 		"id": "knight", "name": "骑士", "hp": 100, "max_energy": 100, "energy_regen": 0.05,
-		"speed": 2.25, "attack_range": 44, "attack_damage": 5,
+		"speed": 2.25, "attack_range": 43, "attack_damage": 5,
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
 		"image_scale": 1.2,
 		"attack_image_scale": 1.7,  # 普攻贴图独立缩放
+		"parry_range": 48.0,  # 招架反射范围：按 skill2 举盾动画的盾牌覆盖范围配置（前方像素）
 		"fields": {}, "world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "idle/", "knight_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "walk/", "knight_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "jump/", "knight_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "attack_sheet.png", 3, 3, 8, 0.1, false, _knight_attack_anchors()),
+			"idle": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "idle/sheet.png", 4, 4, 13, 0.1, true, _knight_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "walk/sheet.png", 4, 3, 12, 0.1, true, _knight_walk_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(KNIGHT_ANI_DIR + "jump/sheet.png", 4, 3, 5, 0.3, _knight_jump_anchors()),
+			"attack": _knight_attack_anim(),
 			"skill2": FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.1, false, _knight_skill2_anchors()),
 			"ult": FrameAnimation.load_from_frames(KNIGHT_ANI_DIR + "ult/", "knight_ult_f_", _ult_frame_specs(), false),
 		},
@@ -77,6 +84,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	comp.parry_active = true
 	comp.parry_timer = 90  # 1.5秒
 	comp.parry_hit = false
+	comp.parry_ranged_hit = false
 	comp.parry_cd_on_end = true
 	comp.rending_used = false
 	owner.defense += PARRY_DEFENSE  # 招架防御 +200（等效减伤 80%）
@@ -94,11 +102,8 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	comp.charge_start = Time.get_ticks_msec()
 	owner.charging_skill1 = true
 	owner.charge_start_time = comp.charge_start
-	# 切换蓄力贴图
-	var charge_anim = FrameAnimation.new()
-	charge_anim.add_frame(CHAR_CHARGE, 999.0)
-	charge_anim.loop = true
-	owner.config["animations"]["skill1_charge"] = charge_anim
+	# 蓄力动画（sheet.png 3x2 共 6 帧，非循环）：持续蓄力时播完定格在最后一帧
+	owner.config["animations"]["skill1_charge"] = _knight_skill1_charge_anim()
 	owner.set_animation_state("skill1_charge")
 	return {"success": true}
 
@@ -113,6 +118,9 @@ static func _fire_half_moon(owner: Fighter, comp: KnightComponent):
 		scale = 2.0
 	elif elapsed >= 1.0:
 		scale = 1.5
+	# 蓄力超过 1s 释放 → 中等屏幕震动（手感反馈）
+	if elapsed >= 1.0:
+		GameWorld.trigger_shake(SKILL1_RELEASE_SHAKE, SKILL1_RELEASE_SHAKE_DUR)
 	
 	var dir = owner.facing
 	var px = owner.pos_x + (owner.w if dir == 1 else 0)
@@ -134,12 +142,9 @@ static func _fire_half_moon(owner: Fighter, comp: KnightComponent):
 	})
 	Fighter.emit_particles(px, py, 25, Color(1.0, 0.87, 0.27), 6, 8, "star")
 	
-	# 蓄力结束贴图（10帧 ≈ 0.17s）
-	comp.charge_end_pose_timer = 10
-	var end_anim = FrameAnimation.new()
-	end_anim.add_frame(CHAR_ENHANCED_ATK, 0.3)
-	end_anim.loop = false
-	owner.config["animations"]["skill1_end"] = end_anim
+	# 蓄力结束释放动画（sheet2.png 3x2 共 5 帧，非循环，0.06s/帧 ≈ 0.3s）
+	comp.charge_end_pose_timer = 18
+	owner.config["animations"]["skill1_end"] = _knight_skill1_release_anim()
 	owner.set_animation_state("skill1_end")
 
 ## 大招：战至黎明 — 进入强化模式（防御+12.5，普攻变裂空牙，能量持续消耗）
@@ -171,6 +176,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	GameWorld.active_overlays.append({
 		"anim": ult_anim,
 		"position": {"type": "fullscreen"},
+		"owner": owner,
 		"overlay_id": "knight_ult",
 		"on_finish": func():
 			owner.state = "idle"
@@ -190,6 +196,15 @@ static func _ult_frame_specs() -> Array:
 		elif i == 9: dur = 1.0
 		specs.append({"index": i, "duration": dur})
 	return specs
+
+## 普攻动画：attack/attack_sheet.png 3x3 共8帧，舍弃前三帧（起手蓄力），保留格4..8 共5帧 ≈ 0.5s（= attack_timer 30帧，完整播放）
+static func _knight_attack_anim() -> FrameAnimation:
+	var anim = FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "attack/attack_sheet.png", 3, 3, 8, 0.1, false, _knight_attack_anchors())
+	if anim.frames.size() > 3:
+		anim.frames = anim.frames.slice(3, 8)  # 保留格 4..8 共 5 帧
+		anim._calc_total_duration()
+		anim._calc_content_h_ref()
+	return anim
 
 ## 攻击动画锚点：把扫描生成的 GDScript 常量组装成 FrameAnimation 需要的字典数组
 static func _knight_attack_anchors() -> Array:
@@ -214,6 +229,79 @@ static func _knight_skill2_anchors() -> Array:
 			"center_dx": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CENTER[i],
 			"content_w": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_W[i],
 			"content_h": KNIGHT_SKILL2_FOOT_GAPS.KNIGHT_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+## 一技能蓄力动画：sheet.png 3x2 共 6 帧，非循环——持续蓄力时播完定格在最后一帧
+static func _knight_skill1_charge_anim() -> FrameAnimation:
+	return FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "skill1/sheet.png", 3, 2, 6, 0.1, false, _knight_skill1_charge_anchors())
+
+## 一技能释放动画：sheet2.png 3x2 共 5 帧（第 6 格空白），非循环
+static func _knight_skill1_release_anim() -> FrameAnimation:
+	return FrameAnimation.load_from_sprite_sheet(KNIGHT_ANI_DIR + "skill1/sheet2.png", 3, 2, 5, 0.06, false, _knight_skill1_release_anchors())
+
+## 一技能蓄力动画锚点：常量来自 knight_skill1_charge_foot_gaps.gd（6 帧）
+static func _knight_skill1_charge_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_FOOT[i],
+			"head_gap": KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_HEAD[i],
+			"center_dx": KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_CENTER[i],
+			"content_w": KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_CONTENT_W[i],
+			"content_h": KNIGHT_SKILL1_CHARGE_FOOT_GAPS.KNIGHT_SKILL1_CHARGE_CONTENT_H[i],
+		})
+	return anchors
+
+## 一技能释放动画锚点：常量来自 knight_skill1_release_foot_gaps.gd（5 帧）
+static func _knight_skill1_release_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_FOOT[i],
+			"head_gap": KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_HEAD[i],
+			"center_dx": KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_CENTER[i],
+			"content_w": KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_CONTENT_W[i],
+			"content_h": KNIGHT_SKILL1_RELEASE_FOOT_GAPS.KNIGHT_SKILL1_RELEASE_CONTENT_H[i],
+		})
+	return anchors
+
+## 待机动画锚点：常量来自 knight_idle_foot_gaps.gd（13 帧）
+static func _knight_idle_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_FOOT[i],
+			"head_gap": KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_HEAD[i],
+			"center_dx": KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_CENTER[i],
+			"content_w": KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_CONTENT_W[i],
+			"content_h": KNIGHT_IDLE_FOOT_GAPS.KNIGHT_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## 跳跃动画锚点：常量来自 knight_jump_foot_gaps.gd（网格 4x3，格768x1024；格 1..4 蹲→蹬→升空，格5滞空保持）
+static func _knight_jump_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_FOOT[i],
+			"head_gap": KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_HEAD[i],
+			"center_dx": KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_CENTER[i],
+			"content_w": KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_CONTENT_W[i],
+			"content_h": KNIGHT_JUMP_FOOT_GAPS.KNIGHT_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## 移动动画锚点：常量来自 knight_walk_foot_gaps.gd（12 帧，角色已水平居中）
+static func _knight_walk_anchors() -> Array:
+	var anchors := []
+	for i in range(KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_FOOT[i],
+			"head_gap": KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_HEAD[i],
+			"center_dx": KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_CENTER[i],
+			"content_w": KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_CONTENT_W[i],
+			"content_h": KNIGHT_WALK_FOOT_GAPS.KNIGHT_WALK_CONTENT_H[i],
 		})
 	return anchors
 
@@ -242,10 +330,7 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 			owner.attack_delay = 8
 			owner.attack_hit_dealt = false
 			owner.attack_cooldown = 60
-			owner.dashing = true
-			owner.dash_remaining = 10
-			owner.dash_dir = owner.facing
-			owner.dash_speed = 5.0
+			# 前冲位移不在此触发：由 update_systems 在普攻动画第 4 帧（刺出）时启动
 			owner.state = "attack"
 			keys.attack = false
 	# 技能一：半月斩 — 按住 U 蓄力，松开释放
@@ -283,8 +368,8 @@ static func _fire_rending_wave(owner: Fighter, comp: KnightComponent):
 	var px = owner.pos_x + (owner.w if dir == 1 else 0)
 	var py = owner.pos_y + 40
 	GameWorld.projectiles.append({
-		"x": px - 30, "y": py - 15,
-		"w": 60, "h": 30,
+		"x": px - 45, "y": py - 22.5,
+		"w": 90, "h": 45,
 		"vx": 8.0 * dir, "vy": 0.0,
 		"life": 60, "damage": 15.0,
 		"owner": owner, "type": "knight_rending",
@@ -315,8 +400,8 @@ static func _fire_enhanced_rending(owner: Fighter, comp: KnightComponent):
 	var px = owner.pos_x + (owner.w if dir == 1 else 0)
 	var py = owner.pos_y + 40
 	GameWorld.projectiles.append({
-		"x": px - 30, "y": py - 15,
-		"w": 60, "h": 30,
+		"x": px - 45, "y": py - 22.5,
+		"w": 90, "h": 45,
 		"vx": 6.0 * dir, "vy": 0.0,
 		"life": 50, "damage": ENHANCED_ATK_DMG,
 		"owner": owner, "type": "knight_enhanced_rending",
@@ -334,6 +419,18 @@ static func update_systems(owner: Fighter):
 	# 非循环动画（attack/ult）播放中同样推进，播完后由状态机切回 idle。
 	if owner.current_anim and owner.current_anim.is_playing():
 		owner.current_anim.update(1.0)
+
+	# 普攻前冲（正义穿刺）：位移随普攻动画刺出帧触发。
+	# 动画已舍弃前三帧（起手蓄力），首帧即刺出 → 起手即前冲，玩家/AI 通用
+	if owner.attacking and not owner.get_meta("knight_dash_done", false):
+		if owner.current_anim and owner.current_anim.get_current_index() >= 0:
+			owner.set_meta("knight_dash_done", true)
+			owner.dashing = true
+			owner.dash_remaining = 10
+			owner.dash_dir = owner.facing
+			owner.dash_speed = 5.0
+	elif not owner.attacking:
+		owner.set_meta("knight_dash_done", false)
 
 	var comp: KnightComponent = owner.components.get_component("knight") if owner.components else null
 	if not comp:
@@ -353,9 +450,18 @@ static func update_systems(owner: Fighter):
 
 	# 招架倒计时
 	if comp.parry_active:
+		# 远程招架成功检测：反弹的敌方飞行物 owner 变为骑士（类型非 knight_ 前缀）→ 时缓（震动待时缓结束后触发，仅首次）
+		if not comp.parry_ranged_hit and owner.state_flags.get("parry_reflect", false):
+			for proj in GameWorld.projectiles:
+				if proj is Dictionary and proj.get("owner") == owner and not str(proj.get("type", "")).begins_with("knight_"):
+					comp.parry_ranged_hit = true
+					GameWorld.trigger_slow_motion(KnightComponent.PARRY_SLOW_MO, KnightComponent.PARRY_SLOW_MO_FACTOR)
+					comp.parry_shake_pending = true
+					break
 		comp.parry_timer -= 1
 		if comp.parry_timer <= 0:
 			comp.parry_active = false
+			comp.parry_ranged_hit = false
 			owner.defense = maxf(0.0, owner.defense - PARRY_DEFENSE)  # 还原招架防御（保留其他来源如强化模式）
 			owner.state_flags.erase("parry_reflect")
 			if owner.image_state == "skill2":
@@ -366,6 +472,11 @@ static func update_systems(owner: Fighter):
 				var s = owner.get_skill("skill2")
 				if s:
 					s.cd = s.cooldown
+
+	# 招架成功震动：时缓结束后再触发（招架成功 > 时缓 > 震动，不与时缓同时）
+	if comp.parry_shake_pending and GameWorld.slow_mo_timer <= 0:
+		comp.parry_shake_pending = false
+		GameWorld.trigger_shake(KnightComponent.PARRY_SHAKE, KnightComponent.PARRY_SHAKE_DUR)
 
 	# 骑士攻击提升计时（10%）
 	if comp.atk_boost_timer > 0:
@@ -393,11 +504,28 @@ static func update_systems(owner: Fighter):
 				owner.set_animation_state("idle")
 		# 能量消耗：10/秒 = 10/60 每帧
 		owner.energy = maxf(0, owner.energy - ENHANCED_ENERGY_DRAIN / 60.0)
-		# 淡蓝色光晕粒子（每帧）
-		Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 5, Color(0.3, 0.5, 1.0, 0.35), 4, 7, "circle", 1.0)
-		Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 2, Color(0.2, 0.4, 1.0, 0.2), 6, 10, "star", 1.5)
+		# 淡蓝色光晕粒子（节流：每2帧少量生成，削弱强化状态粒子量）
+		if GameWorld.frame % 2 == 0:
+			Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 3, Color(0.3, 0.5, 1.0, 0.35), 4, 7, "circle", 1.0)
+			Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 1, Color(0.2, 0.4, 1.0, 0.2), 6, 10, "star", 1.5)
 		# 能量耗尽 → 退出强化模式
 		if owner.energy <= 0:
 			comp.enhanced_mode = false
 			owner.defense = maxf(0.0, owner.defense - ENHANCED_DEFENSE)
 			owner.energy = 0
+
+## 体系统：骑士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: KnightComponent = f.components.get_component("knight") if f.components else null
+	if comp and comp.enhanced_mode:
+		return Fighter.BODY_NORMAL  # 战至黎明强化模式：不加优先级
+	if f.charging_skill1:
+		return Fighter.BODY_SKILL  # 半月斩蓄力
+	if comp and comp.parry_active:
+		return Fighter.BODY_SKILL  # 不屈回响招架
+	return -1
+
+## 防御/招架类：不屈回响免疫打断
+static func is_defense_parry(f: Fighter) -> bool:
+	var comp: KnightComponent = f.components.get_component("knight") if f.components else null
+	return comp != null and comp.parry_active

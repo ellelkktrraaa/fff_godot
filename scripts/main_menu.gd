@@ -60,6 +60,11 @@ var char_cards := {}
 var _title_click_count := 0  # 作弊计数器
 var _talent_from_char_select := false  # 天赋界面是否来自选人界面
 
+# ── 法师/黑法师共生形态：选人界面双击法师卡切换，持久化保存（退出游戏不自动切回）──
+const MAGE_FORM_CFG := "user://settings.cfg"
+const MAGE_FORM_KEY := "mage_form"
+var mage_form := "mage"   # "mage" = 法师, "black_mage" = 黑法师
+
 # 加载滤镜（游戏结束 ESC/C 返回时的灰色呼吸遮罩 + 上升浮动圆点）
 var _loading_filter: ColorRect = null
 var _loading_dots: Array = []
@@ -81,6 +86,7 @@ func _ready():
 	print("[MainMenu] _ready() start")
 	TalentPool.init()
 	_init_char_configs()
+	_load_mage_form()  # 恢复法师/黑法师共生形态（退出游戏不自动切回）
 	print("[MainMenu] configs initialized, setting up UI...")
 	
 	title_texture.custom_minimum_size = Vector2(300, 80)
@@ -94,6 +100,7 @@ func _ready():
 	pvp_button.texture_normal = IMG_PVP; pvp_button.texture_pressed = IMG_PVP
 	
 	pve_button.pressed.connect(_on_pve_pressed)
+	pve_button.gui_input.connect(_on_pve_gui_input)  # 右键 = 练习模式
 	coming_button.pressed.connect(_on_coming_pressed)
 	pvp_button.pressed.connect(_on_pvp_pressed)
 	pokedex_btn.pressed.connect(_on_pokedex_pressed)
@@ -116,6 +123,8 @@ func _ready():
 	
 	_style_pokedex_button()
 	_style_exit_button()
+	# PVE 按钮提示：左键 PVE，右键进入练习模式
+	pve_button.tooltip_text = "左键：PVE 挑战 ｜ 右键：练习模式"
 	_style_dex_overlay()
 	_style_diff_buttons()
 	_style_char_select_buttons()
@@ -137,6 +146,9 @@ func _ready():
 	if GameWorld.skip_to_char_select:
 		GameWorld.skip_to_char_select = false
 		_show_char_select()
+	else:
+		# 主界面 BGM
+		AudioManager.play_music("bgm_menu")
 
 	# 加载滤镜：作为最后子节点绘制在全部 UI 之上（ESC/C 返回菜单时显示）
 	_loading_filter = ColorRect.new()
@@ -186,7 +198,8 @@ func _process(_delta):
 func _populate_dex_grid():
 	for child in dex_grid.get_children():
 		child.queue_free()
-	for cid in CharConfigs.get_all_ids():
+	# 图鉴列出全部角色（含隐藏形态黑法师：选人界面不可用，但图鉴仍可见）
+	for cid in CharacterFactory.get_all_char_ids():
 		var cfg = CharConfigs.configs.get(cid, {})
 		var dex = cfg.get("dex", {})
 		var icon = dex.get("icon", "?")
@@ -243,6 +256,7 @@ func _on_dex_card_clicked(char_id: String):
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED  # 图鉴只保留竖向滚动
 	scroll.name = "DexBodyScroll"
 
 	_dex_body = VBoxContainer.new()
@@ -283,8 +297,9 @@ func _on_dex_card_clicked(char_id: String):
 	_dex_desc = desc  # 保存引用供技能按钮使用
 	text_area.add_child(desc)
 	
-	# Stats row at bottom of text area
-	var stats_box = HBoxContainer.new()
+	# Stats row at bottom of text area（HFlow 自动换行，避免长属性把面板撑出横向滚动条）
+	var stats_box = HFlowContainer.new()
+	stats_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stats_box.add_theme_constant_override("separation", 16)
 	for s in dex.get("stats", []):
 		var lbl = Label.new()
@@ -445,6 +460,7 @@ func _create_talent_dex_overlay():
 	
 	var left_scroll = ScrollContainer.new()
 	left_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED  # 图鉴只保留竖向滚动
 	left_panel.add_child(left_scroll)
 	
 	var card_list = VBoxContainer.new()
@@ -659,6 +675,11 @@ func _style_dex_overlay():
 	dex_intro_label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
 	talent_tab_btn.visible = false
 	char_tab_btn.text = "📋 角色列表"
+	# 图鉴规范：只允许竖向滚动条，禁用横向滚动条
+	dex_list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	talent_dex_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var detail_scroll: ScrollContainer = $PokedexOverlay/PokedexPanel/DexDetail/DexDetailScroll
+	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# Tab buttons
 	for btn in [char_tab_btn, talent_tab_btn]:
 		btn.add_theme_font_size_override("font_size", 14)
@@ -752,16 +773,25 @@ func _populate_characters():
 	for child in card_grid.get_children():
 		child.queue_free()
 	char_cards.clear()
-	for cid in CharConfigs.get_all_ids():
+	# 选人只列可选角色（黑法师是法师的共生形态，靠法师卡双击切换，无独立卡片）
+	for cid in CharacterFactory.get_visible_char_ids():
 		var card = _create_char_card(cid)
 		card_grid.add_child(card)
 		char_cards[cid] = card
 	_select_card("knight")
 
+## 法师卡显示形态对应的真实角色（mage 形态 → mage，黑法师形态 → black_mage）
+func _char_display_id(char_id: String) -> String:
+	if char_id == "mage":
+		return mage_form
+	return char_id
+
 func _create_char_card(char_id: String) -> Control:
-	var config = CharConfigs.configs.get(char_id, {})
-	var img = _get_portrait_texture(char_id)
-	var name_str = CharConfigs.get_char_name(char_id)
+	# 法师卡按当前形态显示（立绘/名字/数值取自形态对应角色）
+	var display_id := _char_display_id(char_id)
+	var config = CharConfigs.configs.get(display_id, {})
+	var img = _get_portrait_texture(display_id)
+	var name_str = CharConfigs.get_char_name(display_id)
 	var hp = config.get("hp", 0)
 	var energy = config.get("max_energy", 0)
 	
@@ -837,13 +867,17 @@ func _select_card(char_id: String):
 	_update_all_card_styles()
 
 func _update_all_card_styles():
+	# 法师/黑法师共生形态都对应"法师卡"（卡片 key 恒为 mage，形态决定显示与选中角色）
+	var selected_key := selected_char
+	if selected_char == "mage" or selected_char == "black_mage":
+		selected_key = "mage"
 	for cid in char_cards:
 		var card = char_cards[cid]
 		var inner = card.get_child(0) as PanelContainer
 		var border = inner.get_theme_stylebox("panel", "PanelContainer") as StyleBoxFlat
 		if not border: continue
 		
-		var is_player = (cid == selected_char)
+		var is_player = (cid == selected_key)
 		var is_ai = (cid == selected_ai_char)
 		
 		if is_player:
@@ -864,7 +898,12 @@ func _update_all_card_styles():
 func _on_card_clicked(event: InputEvent, char_id: String):
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			_select_card(char_id)
+			if event.double_click and char_id == "mage":
+				# 双击法师卡：切换法师/黑法师共生形态（持久化，退出游戏不自动切回）
+				_toggle_mage_form()
+			else:
+				# 法师卡按当前形态选中（黑法师形态下选中 black_mage，否则进游戏会变成法师）
+				_select_card(_char_display_id(char_id))
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			# 右键选择/取消AI英雄
 			if selected_ai_char == char_id:
@@ -873,6 +912,48 @@ func _on_card_clicked(event: InputEvent, char_id: String):
 				selected_ai_char = char_id
 			_update_all_card_styles()
 			_update_char_title()
+
+## 切换法师/黑法师共生形态并持久化（再次双击切回）
+## 黑法师未解锁（解锁条件待定）：当前双击法师卡无法切换形态
+func _toggle_mage_form():
+	if not _mage_form_unlocked():
+		print("[MainMenu] 黑法师未解锁，双击法师卡无法切换形态")
+		return
+	var prev := selected_char
+	mage_form = "black_mage" if mage_form == "mage" else "mage"
+	_save_mage_form()
+	print("[MainMenu] 法师形态切换为: ", mage_form)
+	# 重建卡片以刷新法师卡显示（立绘/名字/数值）
+	_populate_characters()
+	# 恢复之前选中（若选中的是法师形态则同步切换）
+	if prev == "mage" or prev == "black_mage":
+		_select_card(mage_form)
+	else:
+		_select_card(prev)
+	_update_char_title()
+
+## 黑法师解锁条件（暂未定）：当前恒为 false → 无法通过双击法师卡解锁
+func _mage_form_unlocked() -> bool:
+	return false
+
+## 读取持久化的法师形态（退出游戏不自动切回）
+## 黑法师未解锁：忽略持久化的黑法师形态，强制法师
+func _load_mage_form():
+	mage_form = "mage"
+	if not _mage_form_unlocked():
+		return
+	var cf := ConfigFile.new()
+	if cf.load(MAGE_FORM_CFG) == OK:
+		var v = cf.get_value("settings", MAGE_FORM_KEY, "mage")
+		if v == "mage" or v == "black_mage":
+			mage_form = v
+
+## 保存法师形态到配置文件
+func _save_mage_form():
+	var cf := ConfigFile.new()
+	cf.load(MAGE_FORM_CFG)  # 保留文件其他设置
+	cf.set_value("settings", MAGE_FORM_KEY, mage_form)
+	cf.save(MAGE_FORM_CFG)
 
 # ===== Signal handlers =====
 
@@ -883,7 +964,20 @@ func _init_char_configs():
 
 func _on_pve_pressed():
 	GameWorld.game_mode = "pve"
+	GameWorld.practice_mode = false
 	_show_diff_select()
+
+## PVE 按钮输入：右键进入练习模式（左键仍走 _on_pve_pressed）
+func _on_pve_gui_input(event: InputEvent):
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		_on_practice_pressed()
+
+## 练习模式：右键 PVE 按钮触发，流程 = 选人 > 选天赋 > 战斗
+func _on_practice_pressed():
+	GameWorld.game_mode = "practice"
+	GameWorld.practice_mode = true
+	GameWorld.selected_ai_char_id = ""  # 练习模式敌人默认随机
+	_show_char_select()
 
 func _show_diff_select():
 	menu_main.visible = false
@@ -943,18 +1037,33 @@ func _show_char_select():
 	menu_main.visible = false
 	pokedex_btn.visible = false; exit_btn.visible = false
 	char_select.visible = true
+	# 选人界面 BGM
+	AudioManager.play_music("bgm_select")
 	if char_cards.is_empty(): _populate_characters()
 	selected_ai_char = ""
 	_update_all_card_styles()
 	_update_char_title()
 
 func _update_char_title():
+	if GameWorld.practice_mode:
+		char_title_label.text = "🥊 练习模式 — 选择你的英雄 (左键)"
+		return
 	var ai_name = CharConfigs.get_char_name(selected_ai_char) if selected_ai_char != "" else "随机"
 	char_title_label.text = "选择英雄 (左键)    |    AI: " + ai_name + " (右键选择)"
 
 func _on_back_pressed():
 	char_select.visible = false
-	diff_select.visible = true
+	if GameWorld.practice_mode:
+		# 练习模式流程没有难度选择，返回直接回主界面
+		GameWorld.practice_mode = false
+		menu_main.visible = true
+		pokedex_btn.visible = true
+		exit_btn.visible = true
+		talent_btn.visible = true
+		map_pool_btn.visible = true
+	else:
+		diff_select.visible = true
+	AudioManager.play_music("bgm_menu")
 
 func _on_title_clicked(event: InputEvent):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -980,6 +1089,7 @@ func _on_start_pressed():
 	_talent_from_char_select = true
 	talent_overlay.visible = true
 	char_select.visible = false
+	AudioManager.play_music("bgm_select")  # 天赋界面沿用选人 BGM
 	_rebuild_slot_bar()
 
 # ===== 地图池管理 =====
@@ -1370,6 +1480,7 @@ func _on_talent_close():
 		pokedex_btn.visible = true
 		exit_btn.visible = true
 		map_pool_btn.visible = true
+		AudioManager.play_music("bgm_menu")
 
 func _on_talent_confirm():
 	# 过滤空槽位，只保留已选择的天赋

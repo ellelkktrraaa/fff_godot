@@ -2,21 +2,158 @@
 class_name DragonKnightCharacter
 
 const DK_ANI_DIR = "res://assets/char_ani/dragon_knight/"
+const DK_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_idle_foot_gaps.gd")
+const DK_IN_AIR_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_in_air_foot_gaps.gd")
+const DK_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_skill2_foot_gaps.gd")
+const DK_SKILL1_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_skill1_foot_gaps.gd")
+const DK_WALK_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_walk_foot_gaps.gd")
+const DK_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_jump_foot_gaps.gd")
+const DK_DRAGON_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_dragon_foot_gaps.gd")
+const DK_DRAGON_SHEET = "res://assets/sheet.dragon.png"  # 巨龙形态振翅循环动画（4x4，前14格）
+const DK_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/dragon_knight_attack_sheet_foot_gaps.gd")
+const DK_ATTACK_SHEET = "res://assets/sheet.attack.png"  # 巨龙形态普攻吐息动画（4x4，16格）
+const DK_SKY_RISE_ANIM_DURATION := 91   # 上挑动画实际时长（舍弃前2帧后 sheet 15帧×6+1）
+# 鳞反格挡成功演出（参考骑士二技能招架成功效果）：时缓 + 时缓结束后中震
+const DK_BLOCK_SLOW_MO := 90        # 格挡成功时缓帧数（90 帧 ≈ 1.5s 实机时间）
+const DK_BLOCK_SLOW_MO_FACTOR := 12 # 时缓力度：12 倍慢速（与骑士招架一致）
+const DK_BLOCK_SHAKE := 8.0         # 格挡成功屏幕震动强度（中等偏轻）
+const DK_BLOCK_SHAKE_DUR := 12      # 格挡成功屏幕震动持续帧数
+# 大招一段（化龙）演出：时缓 + 时缓结束后中震
+const DK_ULT1_SLOW_MO := 60         # 化龙时缓帧数（60 帧 = 1s 实机时间）
+const DK_ULT1_SLOW_MO_FACTOR := 12  # 时缓力度：12 倍慢速
+const DK_ULT1_SHAKE := 10.0         # 化龙屏幕震动强度（中等）
+const DK_ULT1_SHAKE_DUR := 12       # 化龙屏幕震动持续帧数
 const DK_FIRE_STAB = preload("res://assets/fx_dragon_knight_fire_stab.png")
 const DK_SKY_SPLIT = preload("res://assets/char_ani/dragon_knight/attack/dragon_knight_attack_air_f_1.png")
-const DK_UPPERCUT = preload("res://assets/fx_dragon_knight_uppercut.png")
-const DK_AIR_STANCE = preload("res://assets/fx_dragon_knight_air_stance.png")
 const DK_DIVE_STRIKE = preload("res://assets/fx_dragon_knight_dive_strike.png")
 const DK_SHIELD = preload("res://assets/fx_dragon_knight_scale_counter.png")
 const DK_FIREBALL_GROUND = preload("res://assets/fx_dragon_knight_fireball_ground.png")
 const DK_FIREBALL_AIR = preload("res://assets/fx_dragon_knight_fireball_air.png")
-const DK_DRAGON_IDLE = preload("res://assets/fx_dragon_knight_dragon_idle.png")
-const DK_DRAGON_FLIGHT = preload("res://assets/fx_dragon_knight_dragon_flight.png")
-const DK_JUMP = preload("res://assets/char_ani/dragon_knight/jump/dragon_knight_jump_f_1.png")
 
-## 从预加载贴图创建单帧 FrameAnimation
-static func _make_anim(tex: Texture2D, dur: float, loop: bool = false) -> FrameAnimation:
-	var a = FrameAnimation.new(); a.add_frame(tex, dur); a.loop = loop; return a
+# ── 单帧动画锚点（保持人物大小与多帧 sheet 一致：内容高度 → 碰撞体高度） ──
+const DK_FIRE_STAB_ANCHOR = {"foot_gap": 231, "head_gap": 407, "center_dx": 35.5, "content_w": 1977, "content_h": 1410}
+const DK_SKY_SPLIT_ANCHOR = {"foot_gap": 0, "head_gap": 144, "center_dx": -1.0, "content_w": 2022, "content_h": 1904}
+const DK_DIVE_STRIKE_ANCHOR = {"foot_gap": 161, "head_gap": 325, "center_dx": -22.5, "content_w": 2003, "content_h": 1562}
+
+## 从预加载贴图创建单帧 FrameAnimation（anchor 可选：{foot_gap, head_gap, center_dx, content_w, content_h}）
+static func _make_anim(tex: Texture2D, dur: float, loop: bool = false, anchor: Dictionary = {}) -> FrameAnimation:
+	var a = FrameAnimation.new()
+	a.add_frame(tex, dur, anchor.get("foot_gap", 0), anchor.get("head_gap", 0), anchor.get("center_dx", 0.0), anchor.get("content_w", 0), anchor.get("content_h", 0))
+	a.loop = loop
+	return a
+
+## idle 动画锚点：从 foot_gaps 常量组装 FrameAnimation 需要的字典数组
+static func _dragon_knight_idle_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_FOOT[i],
+			"head_gap": DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_HEAD[i],
+			"center_dx": DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CENTER[i],
+			"content_w": DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CONTENT_W[i],
+			"content_h": DK_FOOT_GAPS.DRAGON_KNIGHT_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## walk 动画锚点：同 _dragon_knight_idle_anchors 写法
+static func _dragon_knight_walk_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_FOOT[i],
+			"head_gap": DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_HEAD[i],
+			"center_dx": DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_CENTER[i],
+			"content_w": DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_CONTENT_W[i],
+			"content_h": DK_WALK_FOOT_GAPS.DRAGON_KNIGHT_WALK_CONTENT_H[i],
+		})
+	return anchors
+
+## jump 动画锚点：同 _dragon_knight_idle_anchors 写法
+static func _dragon_knight_jump_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_FOOT[i],
+			"head_gap": DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_HEAD[i],
+			"center_dx": DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_CENTER[i],
+			"content_w": DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_CONTENT_W[i],
+			"content_h": DK_JUMP_FOOT_GAPS.DRAGON_KNIGHT_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## in_air 动画锚点：同 _dragon_knight_idle_anchors 写法
+static func _dragon_knight_in_air_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_FOOT[i],
+			"head_gap": DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_HEAD[i],
+			"center_dx": DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_CENTER[i],
+			"content_w": DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_CONTENT_W[i],
+			"content_h": DK_IN_AIR_FOOT_GAPS.DRAGON_KNIGHT_IN_AIR_CONTENT_H[i],
+		})
+	return anchors
+
+## skill2 动画锚点：同 _dragon_knight_idle_anchors 写法
+static func _dragon_knight_skill2_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_FOOT[i],
+			"head_gap": DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_HEAD[i],
+			"center_dx": DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CENTER[i],
+			"content_w": DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CONTENT_W[i],
+			"content_h": DK_SKILL2_FOOT_GAPS.DRAGON_KNIGHT_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+## 技能一（上挑）动画锚点：同 _dragon_knight_idle_anchors 写法
+static func _dragon_knight_skill1_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_FOOT[i],
+			"head_gap": DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_HEAD[i],
+			"center_dx": DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_CENTER[i],
+			"content_w": DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_CONTENT_W[i],
+			"content_h": DK_SKILL1_FOOT_GAPS.DRAGON_KNIGHT_SKILL1_CONTENT_H[i],
+		})
+	return anchors
+
+## 技能一动画：加载 sheet 后舍弃前两帧（蓄力帧），保留原第 3~17 帧共 15 帧（锚点随帧携带）
+static func _dragon_knight_skill1_anim() -> FrameAnimation:
+	var anim = FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill1/sheet.png", 5, 4, 17, 0.1, false, _dragon_knight_skill1_anchors())
+	if anim.frames.size() > 2:
+		anim.frames = anim.frames.slice(2, anim.frames.size())
+		anim._calc_total_duration()
+		anim._calc_content_h_ref()
+	return anim
+
+## 巨龙形态振翅循环动画锚点（sheet.dragon.png 4x4 网格前 14 格）
+static func _dragon_knight_dragon_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_FOOT[i],
+			"head_gap": DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_HEAD[i],
+			"center_dx": DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_CENTER[i],
+			"content_w": DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_CONTENT_W[i],
+			"content_h": DK_DRAGON_FOOT_GAPS.DRAGON_KNIGHT_DRAGON_CONTENT_H[i],
+		})
+	return anchors
+
+## 巨龙形态普攻吐息动画锚点（sheet.attack.png 4x3 网格 12 格）
+static func _dragon_knight_attack_sheet_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_FOOT.size():
+		anchors.append({
+			"foot_gap": DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_FOOT[i],
+			"head_gap": DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_HEAD[i],
+			"center_dx": DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_CENTER[i],
+			"content_w": DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_CONTENT_W[i],
+			"content_h": DK_ATTACK_FOOT_GAPS.DRAGON_KNIGHT_ATTACK_SHEET_CONTENT_H[i],
+		})
+	return anchors
 
 static func get_config() -> Dictionary:
 	return {
@@ -24,6 +161,9 @@ static func get_config() -> Dictionary:
 		"speed": 2.2, "attack_range": 44, "attack_damage": 5,
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
 		"image_scale": 1.2,
+		# 一技能上挑动画放大 1.2 倍：蓄力/起跳帧内容高度偏矮，放大后填满碰撞盒
+		# 巨龙形态 3.6 倍：锚点基准(56px内容高)放大后渲染约 202px，比原 336px 缩小 40%
+		"anim_scale_states": {"skill1": 1.2, "ult": 3.6, "ult_flight": 3.6, "ult_attack": 3.6},
 		"fields": {
 			"dragon_scales_active": false,
 			"dragon_scales_timer": 0,
@@ -39,17 +179,18 @@ static func get_config() -> Dictionary:
 		},
 		"world_arrays": [],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(DK_ANI_DIR + "idle/", "dragon_knight_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(DK_ANI_DIR + "walk/", "dragon_knight_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": _make_anim(DK_JUMP, 999.0, true),
-			"attack": _make_anim(DK_FIRE_STAB, 0.5),
-			"attack_air": _make_anim(DK_SKY_SPLIT, 0.5),
-			"skill1": _make_anim(DK_UPPERCUT, 0.5),
-			"flight": _make_anim(DK_AIR_STANCE, 999.0, true),
-			"skill1_phase2": _make_anim(DK_DIVE_STRIKE, 0.5),
-			"skill2": _make_anim(DK_SHIELD, 999.0, true),
-			"ult": _make_anim(DK_DRAGON_IDLE, 999.0, true),
-			"ult_flight": _make_anim(DK_DRAGON_FLIGHT, 999.0, true),
+			"idle": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "idle/sheet.png", 4, 3, 11, 0.1, true, _dragon_knight_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "walk/sheet.png", 4, 3, 11, 0.1, true, _dragon_knight_walk_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(DK_ANI_DIR + "jump/sheet.png", 3, 3, 4, 0.2, _dragon_knight_jump_anchors()),
+			"attack": _make_anim(DK_FIRE_STAB, 0.5, false, DK_FIRE_STAB_ANCHOR),
+			"attack_air": _make_anim(DK_SKY_SPLIT, 0.5, false, DK_SKY_SPLIT_ANCHOR),
+			"skill1": _dragon_knight_skill1_anim(),
+			"skill1_phase2": _make_anim(DK_DIVE_STRIKE, 0.5, false, DK_DIVE_STRIKE_ANCHOR),
+			"skill2": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill2/sheet.png", 5, 5, 24, 0.02, false, _dragon_knight_skill2_anchors()),
+			"in_air": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "in_air/sheet.png", 3, 3, 9, 0.1, true, _dragon_knight_in_air_anchors()),
+			"ult": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors()),
+			"ult_flight": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors()),
+			"ult_attack": FrameAnimation.load_from_sprite_sheet(DK_ATTACK_SHEET, 4, 3, 12, 0.05, false, _dragon_knight_attack_sheet_anchors()),
 		},
 		"dex": {
 			"icon": "🐉",
@@ -81,35 +222,19 @@ static func create_skills() -> Array:
 
 # ===== 技能一：凌空（一段）/ 寂灭（二段） =====
 ## 一段：凌空 — 上挑击飞 + 自身跳起 + 进入飞行（由 Skill 多段框架调用）
+## 伤害/震动不在释放瞬间触发，改为动画第 6 帧（update_systems 中）同步出手
 static func _skill1_phase1(owner: Fighter) -> Dictionary:
 	owner.energy -= 15
-	var dir = owner.facing
 	var cx = owner.pos_x + owner.w / 2.0
 	var cy = owner.pos_y + owner.h / 2.0
+	owner.dk_skill1_hit_dealt = false  # 重置第6帧出伤标记
 
-	# 攻击前方敌人
-	var target = GameWorld.get_opponent(owner)
-	if target and target.hp > 0:
-		var dx = target.pos_x + target.w / 2.0 - cx
-		var dy = target.pos_y + target.h / 2.0 - cy
-		if absf(dx) < 80 and absf(dy) < 100:
-			Fighter.apply_damage(target, 5, owner)
-			target.vy = -14
-			target.vx = dir * 4
-			target.add_status("burn")
-			var burn = target.statuses.back()
-			if burn and burn.id == "burn":
-				burn.duration = 240
-				burn.timer = 240
-				burn.tick_damage = 1.0
-				burn.tick_interval = 120
-
-	# 自身跳起 + 进入凌空状态
-	owner.vy = -7  # 跳跃高度为普跳的2/3
-	owner.grounded = false
+	# 进入凌空状态：动画前 3 帧贴地，动画第 4 帧（idx≥3）起离地（上升由 update_systems 控制）
 	owner.dk_sky_rise_active = true
-	owner.dk_sky_rise_anim_timer = 15
+	owner.dk_sky_rise_anim_timer = DK_SKY_RISE_ANIM_DURATION  # 上挑动画播放一遍
 	owner.dk_flight_timer = 600  # 飞行倒计时（不占用技能cd，确保寂灭可释放）
+	owner.jump_phase = 0  # 清除跳跃动画阶段残留，避免跳跃状态机接管凌空
+	owner.state_flags["no_jump_anim"] = true  # 飞行动画锁：凌空期间跳过跳跃动画状态机
 	owner.set_animation_state("skill1")
 	Fighter.emit_particles(cx, cy, 30, Color(1.0, 0.5, 0.1), 6, 10, "star")
 	return {"success": true}
@@ -125,6 +250,7 @@ static func _skill1_phase2(owner: Fighter) -> Dictionary:
 	# 初始速度：斜向下
 	owner.vx = owner.facing * 6.0
 	owner.vy = 8.0
+	GameWorld.trigger_shake(5.0, 6)  # 释放二段（寂灭）：屏幕微震
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 25, Color(1.0, 0.2, 0.05), 8, 12, "star")
 	return {"success": true}
 
@@ -138,6 +264,8 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	owner.dk_shield_timer = 0
 	owner.dk_shield_held = true
 	owner.dk_shield_absorbed_damage = 0.0
+	owner.dk_shield_block_fx = false      # 重置格挡成功演出标记（每次举盾触发一次）
+	owner.dk_shield_shake_pending = false
 	owner.set_animation_state("skill2")
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 15, Color(1.0, 0.3, 0.1), 5, 8, "circle")
 	return {"success": true}
@@ -152,6 +280,9 @@ static func _ult(owner: Fighter) -> Dictionary:
 	owner.dk_ult_timer = 600  # 10 秒
 	owner.set_animation_state("ult")
 	owner.config["image_scale"] = 6.0  # 巨龙 5 倍大小
+	# 大招一段（化龙）演出：时缓 + 时缓结束后中震
+	GameWorld.trigger_slow_motion(DK_ULT1_SLOW_MO, DK_ULT1_SLOW_MO_FACTOR)
+	owner.dk_ult1_shake_pending = true
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 60, Color(1.0, 0.15, 0.05), 14, 20, "star")
 	return {"success": true}
 
@@ -261,7 +392,7 @@ static func _input_sky_rise(owner: Fighter, keys: Dictionary) -> int:
 	if owner.dk_sky_rise_anim_timer > 0:
 		return 0
 
-	owner.set_animation_state("flight")
+	owner.set_animation_state("in_air")
 	var fly_speed = 4.0
 	var jx = 0.0; var jy = 0.0
 	if keys.left: jx -= 1.0
@@ -306,6 +437,7 @@ static func _ult_fireball(owner: Fighter):
 	owner.attack_hit_dealt = true
 	owner.attack_cooldown = 60
 	owner.dk_burn_applied = false
+	owner.set_animation_state("ult_attack")  # 巨龙形态普攻：吐息动画
 
 	var px = owner.pos_x + (owner.w if owner.facing == 1 else 0)
 	if owner.grounded:
@@ -330,6 +462,7 @@ static func _ult_fireball(owner: Fighter):
 			"reflected": false,
 		})
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 10, Color(1.0, 0.4, 0.1), 4, 6, "circle")
+	GameWorld.trigger_shake(5.0, 6)  # 巨龙吐火：屏幕微震
 
 ## 龙魂大招输入：自由飞行 + 火球普攻 + 二段动画大招
 static func _input_ult(owner: Fighter, keys: Dictionary) -> int:
@@ -367,11 +500,30 @@ static func _input_ult(owner: Fighter, keys: Dictionary) -> int:
 
 # ===== 系统更新 =====
 static func update_systems(owner: Fighter):
+	# 空中普攻落地瞬间：屏幕微震（从空中攻击状态转为落地时触发一次）
+	if owner.grounded:
+		if owner.dk_air_atk_prev_air:
+			owner.dk_air_atk_prev_air = false
+			GameWorld.trigger_shake(5.0, 6)  # 屏幕微震
+	else:
+		if owner.attacking:
+			owner.dk_air_atk_prev_air = true
+	# 落地且不在凌空状态 → 解除飞行动画锁，恢复跳跃状态机接管（凌空/寂灭冲刺期间保持锁定）
+	if owner.grounded and not owner.dk_sky_rise_active:
+		owner.state_flags.erase("no_jump_anim")
+	# 动画帧推进（多帧 sheet 动画需要每帧 update 才能换帧）
+	if owner.current_anim and owner.current_anim.is_playing():
+		owner.current_anim.update(1.0)
 	# 鳞反：举盾吸收伤害
 	if owner.dk_shield_active:
 		owner.dk_shield_timer += 1
 		owner.vx = 0
 		owner.vy = 0
+		# 格挡成功演出（参考骑士二技能招架成功效果）：首次吸收伤害 → 时缓，时缓结束后中震
+		if owner.dk_shield_absorbed_damage > 0 and not owner.dk_shield_block_fx:
+			owner.dk_shield_block_fx = true
+			GameWorld.trigger_slow_motion(DK_BLOCK_SLOW_MO, DK_BLOCK_SLOW_MO_FACTOR)
+			owner.dk_shield_shake_pending = true
 		# 结束条件：满3秒 或 松手且满1秒
 		var should_end = false
 		if owner.dk_shield_timer >= 180:
@@ -395,6 +547,16 @@ static func update_systems(owner: Fighter):
 			if s2: s2.cd = s2.cooldown
 		return
 
+	# 格挡成功震动：时缓结束后再触发（格挡成功 > 时缓 > 震动，不与时缓同时；即使鳞反提前结束也补触发）
+	if owner.dk_shield_shake_pending and GameWorld.slow_mo_timer <= 0:
+		owner.dk_shield_shake_pending = false
+		GameWorld.trigger_shake(DK_BLOCK_SHAKE, DK_BLOCK_SHAKE_DUR)
+
+	# 大招一段（化龙）震动：时缓结束后再触发
+	if owner.dk_ult1_shake_pending and GameWorld.slow_mo_timer <= 0:
+		owner.dk_ult1_shake_pending = false
+		GameWorld.trigger_shake(DK_ULT1_SHAKE, DK_ULT1_SHAKE_DUR)
+
 	# 龙魂大招：倒计时 + 飞行动画交替 + 二段（全屏 overlay）
 	if owner.dk_ult_active:
 		# 二段：吐火 + 爪击两段伤害（动画由 overlay 系统管理）
@@ -409,29 +571,28 @@ static func update_systems(owner: Fighter):
 					var dmg = minf(1.25, 15.0 - owner.dk_ult_fire_total)
 					owner.dk_ult_fire_total += dmg
 					if owner.dk_ult_target_locked:
-						var target = GameWorld.get_opponent(owner)
-						if target and target.hp > 0:
-							Fighter.apply_damage(target, dmg, owner)
+						Fighter.apply_ult_damage_zone(owner, dmg)
 			# ── 爪击（frame13，timer ≤ 90）：瞬间 10 伤 ──
 			if not owner.dk_ult_claw_dealt and owner.dk_ult_phase2_timer <= 90:
 				owner.dk_ult_claw_dealt = true
 				if owner.dk_ult_target_locked:
+					Fighter.apply_ult_damage_zone(owner, 10)
 					var target = GameWorld.get_opponent(owner)
 					if target and target.hp > 0:
-						Fighter.apply_damage(target, 10, owner)
 						target.vy = -16
 						target.vx = owner.facing * 10
 				Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 80, Color(1.0, 0.1, 0.0), 16, 24, "star")
 			return
 
 		owner.dk_ult_timer -= 1
-		# 攻击时不覆盖动画；否则每30帧切换 idle/flight
-		if not owner.attacking:
-			var frame_in_cycle = (600 - owner.dk_ult_timer) % 60
-			if frame_in_cycle < 30:
+		# 普攻 → 吐息动画；攻击结束等吐息动画播完再回振翅循环（ult/ult_flight 共用同一 sheet 循环）
+		if owner.attacking:
+			owner.set_animation_state("ult_attack")
+		elif owner.image_state == "ult_attack":
+			if owner.current_anim and owner.current_anim.is_finished():
 				owner.set_animation_state("ult")
-			else:
-				owner.set_animation_state("ult_flight")
+		else:
+			owner.set_animation_state("ult")
 		if owner.dk_ult_timer <= 0:
 			owner.dk_ult_active = false
 			owner.config["image_scale"] = 1.2  # 恢复原始大小
@@ -469,12 +630,37 @@ static func update_systems(owner: Fighter):
 
 	# 凌空飞行中
 	if owner.dk_sky_rise_active:
-		# 起跳动画：前 15 帧用 uppercut，之后切飞行
+		# 上挑动画播放期间（已舍弃前2帧蓄力帧）：动画第 4 帧（idx≥3 = 原第5帧）起离地持续上升，播完立即切 in_air
 		if owner.dk_sky_rise_anim_timer > 0:
 			owner.dk_sky_rise_anim_timer -= 1
 			owner.set_animation_state("skill1")
+			# 动画第 6 帧（idx≥5）出伤 + 微震（替换原释放瞬间立即出伤）
+			if not owner.dk_skill1_hit_dealt and owner.current_anim and owner.current_anim.get_current_index() >= 5:
+				owner.dk_skill1_hit_dealt = true
+				GameWorld.trigger_shake(5.0, 6)  # 出伤瞬间屏幕微震
+				var tgt = GameWorld.get_opponent(owner)
+				if tgt and tgt.hp > 0:
+					var cx2 = owner.pos_x + owner.w / 2.0
+					var cy2 = owner.pos_y + owner.h / 2.0
+					var dx2 = tgt.pos_x + tgt.w / 2.0 - cx2
+					var dy2 = tgt.pos_y + tgt.h / 2.0 - cy2
+					if absf(dx2) < 80 and absf(dy2) < 100:
+						Fighter.apply_damage(tgt, 5, owner)
+						tgt.vy = -9    # 击飞高度降低（原 -14）
+						tgt.vx = owner.facing * 2  # 击退程度降低（原 4）
+						tgt.add_status("burn")
+						var burn2 = tgt.statuses.back()
+						if burn2 and burn2.id == "burn":
+							burn2.duration = 240
+							burn2.timer = 240
+							burn2.tick_damage = 1.0
+							burn2.tick_interval = 120
+			if owner.current_anim and owner.current_anim.get_current_index() >= 3:
+				owner.grounded = false
+				owner.vy = 0
+				owner.pos_y = clampf(owner.pos_y - 3.0, 40, 380 - owner.h)
 		else:
-			owner.set_animation_state("flight")
+			owner.set_animation_state("in_air")
 		# 飞行倒计时
 		if owner.dk_flight_timer > 0:
 			owner.dk_flight_timer -= 1
@@ -647,3 +833,24 @@ static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
 ## 地狱模式专属走位参数（空字典表示不覆盖）
 static func ai_hell_desire(f: Fighter) -> Dictionary:
 	return {"min": 0, "max": 140}
+
+## 体系统：龙骑士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	if f.dk_ult_active:
+		return Fighter.BODY_ARMOR  # 龙魂 = 霸体
+	if f.dk_shield_active:
+		return Fighter.BODY_SKILL  # 鳞反 = 防御类技能体
+	if f.dk_sky_rise_active or f.dk_crash_timer > 0:
+		return Fighter.BODY_SKILL  # 凌空 / 寂灭
+	return -1  # 龙化形态不加优先级（普攻体）
+
+## 防御/招架类：鳞反免疫打断
+static func is_defense_parry(f: Fighter) -> bool:
+	return f.dk_shield_active
+
+## 被中断时：取消凌空飞行/坠击
+static func on_interrupted(f: Fighter):
+	f.dk_sky_rise_active = false
+	f.dk_crash_timer = 0
+	f.dk_flight_timer = 0
+	f.state_flags.erase("no_jump_anim")

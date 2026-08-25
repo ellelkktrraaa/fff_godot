@@ -11,16 +11,31 @@
 class_name BerserkerCharacter
 
 const BERSERKER_ANI_DIR = "res://assets/char_ani/berserker/"
+const BERSERKER_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/berserker_idle_foot_gaps.gd")
+const BERSERKER_WALK_FOOT_GAPS = preload("res://data/foot_gaps/berserker_walk_foot_gaps.gd")
+const BERSERKER_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/berserker_attack_foot_gaps.gd")
+const BERSERKER_SKILL1_FOOT_GAPS = preload("res://data/foot_gaps/berserker_skill1_foot_gaps.gd")
+const BERSERKER_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/berserker_jump_foot_gaps.gd")
+const BERSERKER_WARCY_FOOT_GAPS = preload("res://data/foot_gaps/berserker_warcry_foot_gaps.gd")
+const BERSERKER_GROUND_SPLIT_FOOT_GAPS = preload("res://data/foot_gaps/berserker_ground_split_foot_gaps.gd")
+const BERSERKER_SKILL2_PARRY_FOOT_GAPS = preload("res://data/foot_gaps/berserker_skill2_parry_foot_gaps.gd")
+const BERSERKER_SKILL2_TENDON_FOOT_GAPS = preload("res://data/foot_gaps/berserker_skill2_tendon_foot_gaps.gd")
 
 # ── 基础属性 ──
 const BASE_HP := 100.0
 const BASE_ENERGY := 80.0
 const BASE_SPEED := 2.2          # 偏慢的重装战士
-const BASE_ATK_RANGE := 64.0     # 双斧斩击范围（较宽）
+const BASE_ATK_RANGE := 64.0     # 基础攻击范围（供技能一连斩 _skill_slash 放大使用，判定框较宽）
 const BASE_ATK_DMG := 5.0        # 连斩总伤害（2 + 3）
 const ATK_COOLDOWN := 55
 const ATK_DELAY := 8
 const ATK_DURATION := 30
+
+# ── 普攻（连斩）判定框：身前 / 身中 / 身后 ──
+# 身中 = 碰撞体本身（宽 32px），保证贴身/重叠的敌人也能命中（仅身前判定时贴脸打不到）；
+# 身前/身后从碰撞体边缘向外延伸（参考 attack/sheet.png 双斧挥舞弧线，取值贴近本作近战惯例）
+const ATK_FRONT_REACH := 52.0    # 身前延伸
+const ATK_BEHIND_REACH := 28.0   # 身后延伸
 
 # ── 技能一：飞斧 ──
 const SKILL1_ENERGY := 15
@@ -38,15 +53,13 @@ const SLASH2_DMG := 7.0          # 连斩第二段
 const SLASH_RANGE_MULT := 1.5    # 连斩前方攻击范围放大倍率（基础 64 → 96，判定框含角色全身）
 
 # ── 技能二 二段（狂暴专属）：地裂 ──
-const GROUND_SPLIT_WINDOW := 360     # 释放断筋斩后 6s 内可释放地裂
+const GROUND_SPLIT_WINDOW := 600     # 释放断筋斩后 10s 内可释放地裂（黄条窗口，含招架/断筋斩演出时间）
 const GROUND_SPLIT_DMG := 5.0        # 地裂冲击波伤害
-const GROUND_SPLIT_DIST := 100.0     # 冲击波飞行距离
+const GROUND_SPLIT_DIST := 200.0     # 冲击波飞行距离
 const GROUND_SPLIT_SPEED := 6.0      # 冲击波飞行速度
 const GROUND_SPLIT_H := 46.0         # 冲击波高度（贴地）
 const GROUND_SPLIT_CD_BONUS := 180   # 使用地裂后技能二冷却 +3s
-const GROUND_SPLIT_STOMP_FRAMES := 30  # 踩碎地面动作持续 0.5s
 const GROUND_SPLIT_IMG_SCALE := 2.0  # 冲击波贴图放大 2 倍
-const STOMP_TEX = preload("res://assets/fx_berserker_stomp.png")   # 踩碎地面
 const GROUND_SPLIT_TEX = preload("res://assets/fx_berserker_ground_split.png") # 冲击波
 static var _ground_split_tex_mirrored: Texture2D = null
 
@@ -69,29 +82,19 @@ const FLASH_SLASH_TEX = preload("res://assets/fx_berserker_flash_slash.png")
 # 飞斧贴图（斧头旋转绘制 / 扔出动画 / 连斩）
 const AXE_TEX = preload("res://assets/fx_berserker_axe.png")
 const BERSERKER_SLASH_TEX = preload("res://assets/char_ani/berserker/skill1/berserker_skill1_f_2.png")
-const SLASH_TEX_SCALE := 1.2      # 连斩贴图（berserker_skill1_f_2.png）放大倍数
+const SLASH_TEX_SCALE := 0.4      # 连斩贴图（berserker_skill1_f_2.png，2048×2048）渲染缩放系数
 
 # ── 技能二：断筋斩 ──
 const SKILL2_ENERGY := 15
 const SKILL2_COOLDOWN := 900     # 15秒
-const PARRY_DURATION := 60       # 举斧招架 1s
-const TENDON_SLASH_DURATION := 60   # 断筋斩演出 1s（期间自己和范围内敌人不能移动）
-const TENDON_SLASH_DMG := 15.0      # 断筋斩总伤害（60 帧按帧出伤）
+const PARRY_DURATION := 102      # 举斧招架 = 招架动画播放一遍（sheet1: 17帧×0.1s=1.7s）
+const TENDON_SLASH_DURATION := 84   # 断筋斩演出 = 动画播放一遍（sheet2: 14帧×0.1s=1.4s）
+const TENDON_SLASH_DMG := 15.0      # 断筋斩总伤害（按帧出伤）
 const TENDON_SLASH_RANGE := 100.0   # 断筋斩命中范围（含自身前后）
-const TENDON_SLASH_SCALE := 1.8     # 断筋斩贴图放大倍数
-
-# 技能二贴图（招架 / 断筋斩）
-const PARRY_TEX = preload("res://assets/fx_berserker_parry.png")
-const TENDON_SLASH_TEX = preload("res://assets/fx_berserker_tendon_slash.png")
-static var _tendon_slash_tex_mirrored: Texture2D = null  # 镜像后的断筋斩贴图（惰性生成）
-
-## 断筋斩贴图水平镜像（贴图提供方向与角色朝向不匹配时使用）
-static func _get_mirrored_tendon_tex() -> Texture2D:
-	if not _tendon_slash_tex_mirrored:
-		var img = TENDON_SLASH_TEX.get_image()
-		img.flip_x()
-		_tendon_slash_tex_mirrored = ImageTexture.create_from_image(img)
-	return _tendon_slash_tex_mirrored
+const TENDON_HIT_TIME_STOP := 40    # 断筋斩命中时停时长（帧 ≈ 0.67s）
+const TENDON_HIT_GRAYSCALE := 40    # 断筋斩命中黑白滤镜（帧，与时停同步）
+const TENDON_HIT_SHAKE := 22.0      # 断筋斩震动强度（命中后震动 / 未命中即时震动）
+const TENDON_HIT_SHAKE_DUR := 18    # 震动时长（帧）
 
 # ── 大招：诸神黄昏（巨大龙卷风） ──
 const ULT_ENERGY := 80
@@ -105,26 +108,18 @@ const ULT_DAMAGE_END := 19       # 出伤持续到第 19 帧
 # ── 子技能：战吼（7键） ──
 const SUB_ENERGY := 0
 const SUB_COOLDOWN := 1200       # 20秒
-const WAR_CRY_DURATION := 90     # 战吼持续 1.5s（霸体 + 减伤50%）
+const WAR_CRY_FRAMES := 12       # 战吼动画帧数（sheet4: 4×3）
+const WAR_CRY_DURATION := 73     # 战吼持续 = 动画播放一遍（sheet4: 12帧，实际 12×6+1=73 帧）
 const WAR_CRY_DEFENSE := 50.0    # 减伤50%（护甲公式 defense/(defense+50) 等效）
 const WAR_CRY_RAGE_HP := 0.4     # 血量低于上限 40% 时使用 → 狂暴模式
-const WAR_CRY_TEX = preload("res://assets/fx_berserker_warcry.png")
+const BERSERKER_WARCY_SHEET = "res://assets/sheet4.png"          # 战吼动画（4×3, 12帧）
+const BERSERKER_GROUND_SPLIT_SHEET = "res://assets/sheet5.png"   # 地裂动画（4×4, 16帧）
 
 # 狂暴模式红色斗气（透明 png 叠加在角色身上，20帧切换循环）
 const RAGE_AURA_TEX1 = preload("res://assets/fx_berserker_rage_aura_1.png")
 const RAGE_AURA_TEX2 = preload("res://assets/fx_berserker_rage_aura_2.png")
 const RAGE_AURA_SWITCH := 20    # 20 帧切换一帧
 const RAGE_AURA_SCALE := 1.15   # 斗气略大于角色身体
-
-## 创建占位动画（纯色块，贴图就绪后替换为 load_from_frames）
-static func _placeholder_anim(color: Color) -> FrameAnimation:
-	var img := Image.create(64, 96, false, Image.FORMAT_RGBA8)
-	img.fill(color)
-	var tex := ImageTexture.create_from_image(img)
-	var a := FrameAnimation.new()
-	a.add_frame(tex, 999.0)
-	a.loop = true
-	return a
 
 ## 大招动画帧规格（来自 output_timetable (4).txt：前 29 帧 0.238s，末帧 1s）
 static func _ult_frame_specs() -> Array:
@@ -136,6 +131,123 @@ static func _ult_frame_specs() -> Array:
 		specs.append({"index": i, "duration": dur})
 	return specs
 
+## 待机动画锚点：从 foot_gaps 常量组装 FrameAnimation 需要的字典数组
+static func _berserker_idle_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_FOOT[i],
+			"head_gap": BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_HEAD[i],
+			"center_dx": BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_CENTER[i],
+			"content_w": BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_CONTENT_W[i],
+			"content_h": BERSERKER_IDLE_FOOT_GAPS.BERSERKER_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+## 移动动画锚点：同待机写法
+static func _berserker_walk_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_FOOT[i],
+			"head_gap": BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_HEAD[i],
+			"center_dx": BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_CENTER[i],
+			"content_w": BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_CONTENT_W[i],
+			"content_h": BERSERKER_WALK_FOOT_GAPS.BERSERKER_WALK_CONTENT_H[i],
+		})
+	return anchors
+
+## 普攻动画锚点：同待机写法
+static func _berserker_attack_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_FOOT[i],
+			"head_gap": BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_HEAD[i],
+			"center_dx": BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_CENTER[i],
+			"content_w": BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_CONTENT_W[i],
+			"content_h": BERSERKER_ATTACK_FOOT_GAPS.BERSERKER_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
+## 一技能（飞斧）动画锚点：同待机写法
+static func _berserker_skill1_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_FOOT[i],
+			"head_gap": BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_HEAD[i],
+			"center_dx": BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_CENTER[i],
+			"content_w": BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_CONTENT_W[i],
+			"content_h": BERSERKER_SKILL1_FOOT_GAPS.BERSERKER_SKILL1_CONTENT_H[i],
+		})
+	return anchors
+
+## 跳跃动画锚点：同待机写法
+static func _berserker_jump_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_FOOT[i],
+			"head_gap": BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_HEAD[i],
+			"center_dx": BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_CENTER[i],
+			"content_w": BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_CONTENT_W[i],
+			"content_h": BERSERKER_JUMP_FOOT_GAPS.BERSERKER_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+## 战吼动画锚点：同待机写法
+static func _berserker_warcry_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_FOOT[i],
+			"head_gap": BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_HEAD[i],
+			"center_dx": BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_CENTER[i],
+			"content_w": BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_CONTENT_W[i],
+			"content_h": BERSERKER_WARCY_FOOT_GAPS.BERSERKER_WARCY_CONTENT_H[i],
+		})
+	return anchors
+
+## 地裂动画锚点：同待机写法
+static func _berserker_ground_split_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_FOOT[i],
+			"head_gap": BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_HEAD[i],
+			"center_dx": BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_CENTER[i],
+			"content_w": BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_CONTENT_W[i],
+			"content_h": BERSERKER_GROUND_SPLIT_FOOT_GAPS.BERSERKER_GROUND_SPLIT_CONTENT_H[i],
+		})
+	return anchors
+
+## 招架动画锚点（sheet1, 17帧）：同待机写法
+static func _berserker_skill2_parry_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_FOOT[i],
+			"head_gap": BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_HEAD[i],
+			"center_dx": BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_CENTER[i],
+			"content_w": BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_CONTENT_W[i],
+			"content_h": BERSERKER_SKILL2_PARRY_FOOT_GAPS.BERSERKER_SKILL2_PARRY_CONTENT_H[i],
+		})
+	return anchors
+
+## 断筋斩动画锚点（sheet2, 14帧）：同待机写法
+static func _berserker_skill2_tendon_anchors() -> Array[Dictionary]:
+	var anchors: Array[Dictionary] = []
+	for i in BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_FOOT.size():
+		anchors.append({
+			"foot_gap": BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_FOOT[i],
+			"head_gap": BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_HEAD[i],
+			"center_dx": BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_CENTER[i],
+			"content_w": BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_CONTENT_W[i],
+			"content_h": BERSERKER_SKILL2_TENDON_FOOT_GAPS.BERSERKER_SKILL2_TENDON_CONTENT_H[i],
+		})
+	return anchors
+
 static func get_config() -> Dictionary:
 	return {
 		"id": "berserker", "name": "狂战士",
@@ -144,15 +256,22 @@ static func get_config() -> Dictionary:
 		"attack_cooldown": ATK_COOLDOWN, "attack_delay": ATK_DELAY, "attack_duration": ATK_DURATION,
 		"image_scale": 1.2,
 		"attack_image_scale": 1.5,  # 普攻贴图独立缩放（放大 1.5 倍）
+		# 技能动画状态：播放期间锁定全部输入，只有受击可提前结束（招架 skill2 保留按 J 出招，不在锁定名单）
+		"skill_anim_states": ["skill1", "skill2_tendon", "skill2_ground_split", "warcry", "ult"],
+		# 单个技能动画的独立缩放倍率（按 image_state）
+		"anim_scale_states": {"skill2_tendon": 1.8},  # 断筋斩动画放大 1.8 倍
 		"fields": {},
 		"world_arrays": [],
 		"animations": {
-			"idle":   FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "idle/", "berserker_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk":   FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "walk/", "berserker_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump":   FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "jump/", "berserker_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "attack/", "berserker_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"skill1": FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "skill1/", "berserker_skill1_f_", [{"index": 1, "duration": 999.0}], false),
-			"skill2": _placeholder_anim(Color(0.5, 0.1, 0.0)),
+			"idle":   FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "idle/sheet.png", 4, 4, 13, 0.1, true, _berserker_idle_anchors()),
+			"walk":   FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "walk/sheet.png", 3, 3, 7, 0.1, true, _berserker_walk_anchors()),
+			"jump":   FrameAnimation.load_jump_sheet(BERSERKER_ANI_DIR + "jump/sheet.png", 3, 3, 9, 0.4, _berserker_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "attack/sheet.png", 3, 2, 6, 0.05, false, _berserker_attack_anchors()),
+			"skill1": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill1/sheet.png", 3, 3, 8, 0.1, false, _berserker_skill1_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill2/sheet1.png", 5, 4, 17, 0.1, false, _berserker_skill2_parry_anchors()),
+			"skill2_tendon": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill2/sheet2.png", 4, 4, 14, 0.1, false, _berserker_skill2_tendon_anchors()),
+			"warcry": FrameAnimation.load_from_sprite_sheet(BERSERKER_WARCY_SHEET, 4, 3, 12, 0.1, false, _berserker_warcry_anchors()),
+			"skill2_ground_split": FrameAnimation.load_from_sprite_sheet(BERSERKER_GROUND_SPLIT_SHEET, 4, 4, 16, 0.1, false, _berserker_ground_split_anchors()),
 			"ult":    FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "ult/", "berserker_ult_f_", _ult_frame_specs(), false),
 		},
 		"dex": {
@@ -164,11 +283,11 @@ static func get_config() -> Dictionary:
 				{"label": "浴血", "value": "失血增伤：每损失 10 血 +4%（最多 +24%）；不可治疗"},
 			],
 			"skills": [
-				{"name": "连斩（普通攻击）", "desc": "挥动双斧斩击身前敌人，造成 2 段伤害（共 5 点）。", "meta": "消耗：无 ｜ 冷却：0.9 秒"},
+				{"name": "连斩（普通攻击）", "desc": "挥动双斧斩击身前敌人，斧刃回旋同样能扫到身后的敌人，造成 2 段伤害（共 5 点）。", "meta": "消耗：无 ｜ 冷却：0.9 秒"},
 				{"name": "飞斧/瞬斩（技能一）", "desc": "【飞斧】掷出高速旋转的飞斧，沿途持续击飞敌人（每次造成 1 点伤害），飞行 200 像素后狂战士瞬移至斧头处发动连斩（共造成 12 点伤害）。\n【瞬斩】狂暴状态下使用飞斧后 6 秒内可释放：向前冲刺约 200 像素斩击敌人（5 点伤害），释放后技能一冷却 +3 秒。", "meta": "消耗：15 能量 ｜ 冷却：8 秒"},
-				{"name": "断筋斩/地裂（技能二）", "desc": "【断筋斩】举斧招架 1 秒，期间受到攻击会瞬移到敌人身后重击；若未受击，可在招架期间按 J 原地出招。断筋斩将敌人按住 1 秒持续出伤（共 15 点伤害），命中后敌人移动速度 -10%、跳跃高度 -60%，持续 5 秒。\n【地裂】狂暴状态下释放断筋斩后 6 秒内可释放：踩碎地面生成穿透性冲击波，飞行 100 像素击飞敌人（5 点伤害），释放后技能二冷却 +3 秒。", "meta": "消耗：15 能量 ｜ 冷却：15 秒"},
+				{"name": "断筋斩/地裂（技能二）", "desc": "【断筋斩】举斧招架 1.7 秒（动画播放一遍），期间受到攻击会瞬移到敌人身后重击；若未受击，可在招架期间按 J 原地出招。断筋斩将敌人按住 1.4 秒持续出伤（共 15 点伤害），命中后敌人移动速度 -10%、跳跃高度 -60%，持续 5 秒。\n【地裂】狂暴状态下释放断筋斩后 10 秒内可释放：踩碎地面生成穿透性冲击波，飞行 200 像素击飞敌人（5 点伤害），释放后技能二冷却 +3 秒。", "meta": "消耗：15 能量 ｜ 冷却：15 秒"},
 				{"name": "诸神黄昏（大招）", "desc": "狂战士挥动双斧制造巨大龙卷风撕碎敌人。动画期间自身无敌，总计造成 40 点伤害。", "meta": "消耗：80 能量 ｜ 冷却：10 秒"},
-				{"name": "战吼（子技能）", "desc": "发出战吼震慑敌人：1.5 秒内获得霸体并提升防御力 +50；全屏敌人随机受到一种震慑效果（移动失灵 1 秒 / 能量 -10 / 技能冷却 +1 秒）。血量低于上限 40% 时使用会进入狂暴模式：全程霸体、免疫所有负面效果、防御力 +12.5、能量回复速度 +20%，代价是每秒受到 1 点真实伤害（血量低于 5 时真伤停止，不会致死；携带「破釜沉舟」天赋时狂暴免真伤），持续到战斗结束。", "meta": "消耗：无 ｜ 冷却：20 秒"},
+				{"name": "战吼（子技能）", "desc": "发出战吼震慑敌人：1.2 秒内获得霸体并提升防御力 +50；全屏敌人随机受到一种震慑效果（移动失灵 1 秒 / 能量 -10 / 技能冷却 +1 秒）。血量低于上限 40% 时使用会进入狂暴模式：全程霸体、免疫所有负面效果、防御力 +12.5、能量回复速度 +20%，代价是每秒受到 1 点真实伤害（血量低于 5 时真伤停止，不会致死；携带「破釜沉舟」天赋时狂暴免真伤），持续到战斗结束。", "meta": "消耗：无 ｜ 冷却：20 秒"},
 			],
 		},
 		"ai_profile": {"ideal_range": [0, 60], "kite": false},
@@ -200,14 +319,9 @@ static func _skill1(owner: Fighter) -> Dictionary:
 	var dir = owner.facing
 	var cx = owner.pos_x + owner.w / 2.0
 	owner.set_animation_state("skill1")
-	# 生成飞行斧头
-	owner.state_flags["berserker_axe"] = {
-		"x": cx + dir * 8.0, "y": owner.pos_y + 8.0,
-		"w": AXE_W, "h": AXE_H,
-		"vx": AXE_SPEED * dir, "vy": 0.0,
-		"dist": 0.0, "rot": 0.0,
-		"hit_cd": {},  # 每个敌人命中冷却
-	}
+	# 飞斧延迟到投掷动画第 5 帧（斧头脱手）时飞出：5×6+1=31 帧
+	owner.state_flags["berserker_axe_delay"] = 31
+	owner.state_flags["berserker_axe_data"] = {"cx": cx, "dir": dir}
 	# 注册旋转斧头绘制
 	GameWorld.register_draw_effect("berserker_axe", func(font, cam_x, cam_y):
 		if not is_instance_valid(owner):
@@ -216,7 +330,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 		if not axe is Dictionary:
 			return []
 		return [
-			{"type": "set_transform", "pos": Vector2(axe["x"] + axe["w"] / 2.0 - cam_x, axe["y"] + axe["h"] / 2.0 - cam_y), "rot": axe["rot"], "scale": Vector2(1, 1)},
+			{"type": "set_transform", "pos": Vector2(axe["x"] + axe["w"] / 2.0 - cam_x, axe["y"] + axe["h"] / 2.0 - cam_y), "rot": axe["rot"], "scale": Vector2(2, 2)},
 			{"type": "tex", "tex": AXE_TEX, "rect": Rect2(-axe["w"] / 2.0, -axe["h"] / 2.0, axe["w"], axe["h"])},
 			{"type": "reset_transform"},
 		]
@@ -257,6 +371,23 @@ static func _skill2_ground_split(owner: Fighter) -> Dictionary:
 	if not owner.state_flags.get("berserker_rage", false):
 		return {"success": false}
 	var dir = owner.facing
+	GameWorld.trigger_shake(8.0, 12)  # 狂暴二技能二段（地裂）：屏幕震动
+	# 播放地裂动画（sheet5, 4×4, 16帧）；冲击波延迟到踩地瞬间出现（动画第 6 帧落地：5×0.1s×60=30 帧）
+	owner.set_animation_state("skill2_ground_split")
+	owner.state_flags["berserker_ground_split_delay"] = 30
+	owner.state_flags["berserker_ground_split_data"] = {"dir": dir}
+	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 30, Color(1.0, 0.55, 0.1), 8, 12, "circle", 1.2)
+	# 使用二段后：技能二进入冷却且冷却时间 +3s
+	var s2 = owner.get_skill("skill2")
+	if s2:
+		s2.cd = s2.cooldown + GROUND_SPLIT_CD_BONUS
+	return {"success": true}
+
+## 生成地裂冲击波（延迟 6 帧后由 update_systems 调用）
+static func _spawn_ground_split_wave(owner: Fighter):
+	var gs_data: Dictionary = owner.state_flags.get("berserker_ground_split_data", {})
+	var dir = int(gs_data.get("dir", owner.facing))
+	owner.state_flags.erase("berserker_ground_split_data")
 	# 冲击波碰撞/贴图放大 2 倍（飞行距离不变，仍为 GROUND_SPLIT_DIST）
 	var gw = GROUND_SPLIT_DIST * GROUND_SPLIT_IMG_SCALE
 	var gh = GROUND_SPLIT_H * GROUND_SPLIT_IMG_SCALE
@@ -275,22 +406,12 @@ static func _skill2_ground_split(owner: Fighter) -> Dictionary:
 		"reflected": false,
 		"launch_vy": -14.0, "launch_vx": dir * 6.0,  # 振飞敌人
 	})
-	# 踩碎地面动作（0.5s）
-	owner.state_flags["berserker_stomp"] = GROUND_SPLIT_STOMP_FRAMES
-	owner.state_flags["draw_texture_override"] = STOMP_TEX
-	Fighter.emit_particles(px + gw / 2.0, py + gh / 2.0, 30, Color(1.0, 0.55, 0.1), 8, 12, "circle", 1.2)
-	# 使用二段后：技能二进入冷却且冷却时间 +3s
-	var s2 = owner.get_skill("skill2")
-	if s2:
-		s2.cd = s2.cooldown + GROUND_SPLIT_CD_BONUS
-	return {"success": true}
 
 # ===== 技能二：断筋斩 =====
-## 举斧招架 1s：期间受击 → 瞬移敌人身后断筋斩；未受击按 U → 原地断筋斩
+## 举斧招架（播放招架动画，时长 = 动画播放一遍）：期间受击 → 瞬移敌人身后断筋斩；未受击按 J → 原地断筋斩
 static func _skill2(owner: Fighter) -> Dictionary:
 	owner.set_animation_state("skill2")
 	owner.state_flags["berserker_parry"] = {"timer": PARRY_DURATION, "triggered": false}
-	owner.state_flags["draw_texture_override"] = PARRY_TEX  # 招架贴图
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 25, Color(0.85, 0.5, 0.15), 5, 7, "star")
 	return {"success": true}
 
@@ -302,9 +423,9 @@ static func _end_parry(owner: Fighter):
 	if owner.image_state == "skill2":
 		owner.set_animation_state("idle")
 
-## 发动断筋斩：target 为受击反击目标（瞬移敌人身后），null 为原地出招
+## 发动断筋斩（播放断筋斩动画，时长 = 动画播放一遍）：target 为受击反击目标（瞬移敌人身后），null 为原地出招
 static func _start_tendon_slash(owner: Fighter, target: Fighter):
-	# 招架已被触发/提前出招 → 清除招架状态与招架贴图
+	# 招架已被触发/提前出招 → 清除招架状态
 	owner.state_flags.erase("berserker_parry")
 	owner.state_flags.erase("draw_texture_override")
 	owner.state_flags.erase("draw_texture_override_scale")
@@ -318,10 +439,8 @@ static func _start_tendon_slash(owner: Fighter, target: Fighter):
 		owner.vy = 0
 		owner.grounded = true
 		owner.facing = -dir  # 面向敌人
-	owner.state_flags["berserker_tendon"] = {"timer": TENDON_SLASH_DURATION}
-	owner.state_flags["draw_texture_override"] = _get_mirrored_tendon_tex()
-	owner.state_flags["draw_texture_override_scale"] = TENDON_SLASH_SCALE
-	owner.set_animation_state("skill2")
+	owner.state_flags["berserker_tendon"] = {"timer": TENDON_SLASH_DURATION, "rumble": 0, "hit_impact": false}
+	owner.set_animation_state("skill2_tendon")
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 30, Color(0.75, 0.9, 0.3), 8, 12, "star")
 
 ## 断筋斩范围判定：以角色中心为圆心的方形范围（含自身前后）
@@ -333,10 +452,12 @@ static func _in_tendon_range(owner: Fighter, f: Fighter) -> bool:
 	return absf(cx - fx) < (TENDON_SLASH_RANGE + f.w) / 2.0 and absf(cy - fy) < (TENDON_SLASH_RANGE + f.h) / 2.0
 
 # ===== 子技能：战吼（7键） =====
-## 发出战吼震慑敌人：1.5s 霸体+减伤50%；全屏敌人随机 debuff；残血触发狂暴模式
+## 发出战吼震慑敌人：动画播放一遍（1.2s）内霸体+减伤50%；全屏敌人随机 debuff；残血触发狂暴模式
 static func _sub_warcry(owner: Fighter) -> Dictionary:
+	# 播放战吼动画（sheet4, 4×3, 12帧）；技能相关时间以动画播放一遍为准（12×0.1s=1.2s=72帧）
+	owner.set_animation_state("warcry")
 	owner.state_flags["berserker_warcry"] = {"timer": WAR_CRY_DURATION}
-	owner.state_flags["draw_texture_override"] = WAR_CRY_TEX  # 战吼贴图（1.5s）
+	GameWorld.trigger_shake(8.0, 12)  # 子技能（战吼）：屏幕震动
 	# 霸体 + 减伤 50%（防御 +50，护甲公式等效）
 	Fighter.set_super_armor(owner, WAR_CRY_DURATION)
 	owner.defense += WAR_CRY_DEFENSE
@@ -370,6 +491,11 @@ static func _apply_warcry_debuff(owner: Fighter, f: Fighter):
 ## 进入狂暴模式：全程霸体、免疫负面、减伤20%、能量回复+20%；代价每秒1真实伤害
 static func _enter_rage_mode(owner: Fighter):
 	owner.state_flags["berserker_rage"] = true
+	# 强化子技能（狂暴战吼）：全局时停，狂战士作为出招者（state_flags["time_stop"]）在时停中持续行动；
+	# 时停结束后标记由 update_systems 清除，避免 is_time_stopped 永久为真
+	if GameWorld.trigger_time_stop(60):
+		owner.state_flags["time_stop"] = true
+	GameWorld.trigger_shake(10.0, 12)  # 屏幕震动（时停期间相机暂停，时停结束后可见）
 	owner.state_flags["immune_negative_status"] = true  # 免疫所有负面效果
 	owner.statuses.clear()  # 清除已存在的负面状态
 	owner.defense += 12.5  # 减伤 20%（护甲公式 defense/(defense+50) 等效）
@@ -523,6 +649,16 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 
 # ===== 每帧专属逻辑 =====
 static func update_systems(owner: Fighter):
+	# 强化子技能时停标记：狂战士为出招者（时停中持续行动）；时停结束自动清除，防止 is_time_stopped 永久为真
+	if owner.state_flags.get("time_stop", false) and GameWorld.time_stop_timer <= 0:
+		owner.state_flags["time_stop"] = false
+	# 动画帧推进（多帧 sheet 动画需要每帧 update 才能换帧）
+	if owner.current_anim and owner.current_anim.is_playing():
+		owner.current_anim.update(1.0)
+	# 技能动画播完回待机（战吼/地裂/断筋斩：无独立结束逻辑）
+	if owner.current_anim and owner.current_anim.is_finished():
+		if owner.image_state == "warcry" or owner.image_state == "skill2_ground_split" or owner.image_state == "skill2_tendon":
+			owner.set_animation_state("idle")
 	# 连斩普攻：双斧两段伤害（2 + 3，随攻击力缩放）
 	if owner.attacking and not owner.state_flags.get("berserker_slash1", true):
 		if owner.attack_timer <= 20:
@@ -536,7 +672,29 @@ static func update_systems(owner: Fighter):
 	if not owner.attacking:
 		owner.state_flags.erase("berserker_slash1")
 		owner.state_flags.erase("berserker_slash2")
-	# ── 飞斧（技能一）：斧头飞行 → 抵达后瞬移连斩 ──
+	# ── 飞斧（技能一）：释放 6 帧后飞出 → 飞行 → 抵达后瞬移连斩 ──
+	if owner.state_flags.get("berserker_axe_delay", 0) > 0:
+		owner.state_flags["berserker_axe_delay"] -= 1
+		if owner.state_flags["berserker_axe_delay"] <= 0:
+			var ad: Dictionary = owner.state_flags.get("berserker_axe_data", {})
+			var ax_dir = int(ad.get("dir", owner.facing))
+			var ax_cx = float(ad.get("cx", owner.pos_x + owner.w / 2.0))
+			owner.state_flags["berserker_axe"] = {
+				"x": ax_cx + ax_dir * 8.0, "y": owner.pos_y + 8.0,
+				"w": AXE_W, "h": AXE_H,
+				"vx": AXE_SPEED * ax_dir, "vy": 0.0,
+				"dist": 0.0, "rot": 0.0,
+				"hit_cd": {},  # 每个敌人命中冷却
+			}
+			owner.state_flags.erase("berserker_axe_data")
+	# ── 地裂（技能二 二段）：冲击波延迟 6 帧后出现 ──
+	if owner.state_flags.get("berserker_ground_split_delay", 0) > 0:
+		owner.state_flags["berserker_ground_split_delay"] -= 1
+		if owner.state_flags["berserker_ground_split_delay"] <= 0:
+			if owner.hp > 0:
+				_spawn_ground_split_wave(owner)
+			else:
+				owner.state_flags.erase("berserker_ground_split_data")
 	var axe = owner.state_flags.get("berserker_axe")
 	if axe:
 		if owner.hp <= 0:
@@ -590,6 +748,22 @@ static func update_systems(owner: Fighter):
 		tendon["timer"] -= 1
 		owner.state_flags["tendon_locked"] = true  # 自己不能移动
 		var tick_dmg = TENDON_SLASH_DMG / TENDON_SLASH_DURATION
+		# 斩出：断筋斩动画第 4~8 帧（idx 3~7）——命中反馈判定（一次）
+		# 命中 → 命中瞬间 时停+黑白，时停结束后紧跟震动；未命中 → 仅震动
+		if not tendon.get("hit_impact", false) and owner.image_state == "skill2_tendon" \
+				and owner.current_anim and owner.current_anim.is_playing():
+			var dk_idx: int = owner.current_anim.get_current_index()
+			if dk_idx >= 3 and dk_idx <= 7:
+				tendon["hit_impact"] = true
+				var enemy = GameWorld.get_opponent(owner)
+				var hit: bool = enemy != null and enemy.hp > 0 and _in_tendon_range(owner, enemy)
+				if hit and GameWorld.trigger_time_stop(TENDON_HIT_TIME_STOP):
+					GameWorld.trigger_grayscale(TENDON_HIT_GRAYSCALE)
+					GameWorld.queue_after_time_stop(func():
+						GameWorld.trigger_shake(TENDON_HIT_SHAKE, TENDON_HIT_SHAKE_DUR))
+				else:
+					# 未命中，或 PvP 下时停不可用 → 即时震动
+					GameWorld.trigger_shake(TENDON_HIT_SHAKE, TENDON_HIT_SHAKE_DUR)
 		for f in GameWorld.entities:
 			if f == owner or f.hp <= 0:
 				continue
@@ -598,6 +772,11 @@ static func update_systems(owner: Fighter):
 				Fighter.apply_damage(f, tick_dmg, owner, false, Color(0.75, 0.9, 0.3), "hit_enemy", "domain")
 				if not f.has_status("tendon_cut"):
 					f.add_status("tendon_cut")  # 移速-10% / 跳跃高度-60%，持续5s
+				# 持续切割的轻微震动（命中后每 15 帧一次，仅限后段避免覆盖斩出重震）
+				tendon["rumble"] = tendon.get("rumble", 0) + 1
+				if tendon["rumble"] >= 15 and tendon["timer"] <= TENDON_SLASH_DURATION - 45:
+					tendon["rumble"] = 0
+					GameWorld.trigger_shake(4.0, 6)
 		if tendon["timer"] <= 0:
 			# 结束：解除自身与范围内敌人的移动锁定
 			owner.state_flags.erase("tendon_locked")
@@ -605,18 +784,15 @@ static func update_systems(owner: Fighter):
 				if is_instance_valid(f):
 					f.state_flags.erase("tendon_locked")
 			owner.state_flags.erase("berserker_tendon")
-			owner.state_flags.erase("draw_texture_override")
-			owner.state_flags.erase("draw_texture_override_scale")
 			owner.set_animation_state("idle")
 	# ── 招架（技能二）：受击 → 瞬移身后断筋斩；时间到 → 结束招架 ──
 	var parry = owner.state_flags.get("berserker_parry")
 	if parry:
 		parry["timer"] -= 1
 		owner.vx = 0  # 招架中不可移动
-		# 受到攻击（damage_flash 标记）→ 反击（触发时缓，参考骑士招架成功）
+		# 受到攻击（damage_flash 标记）→ 反击（打击感特效在 _start_tendon_slash 中统一触发）
 		if not parry.get("triggered", false) and owner.damage_flash > 0:
 			parry["triggered"] = true
-			GameWorld.trigger_slow_motion(90)
 			var target = GameWorld.get_opponent(owner)
 			if target and target.hp > 0:
 				_start_tendon_slash(owner, target)
@@ -624,24 +800,14 @@ static func update_systems(owner: Fighter):
 				_end_parry(owner)
 		elif parry["timer"] <= 0 and not parry.get("triggered", false):
 			_end_parry(owner)
-	# ── 战吼（子技能）：1.5s 霸体+减伤，到时还原防御并清理贴图 ──
+	# ── 战吼（子技能）：动画播放一遍（1.2s）内霸体+减伤，到时还原防御并回待机 ──
 	var warcry = owner.state_flags.get("berserker_warcry")
 	if warcry:
 		warcry["timer"] -= 1
 		if warcry["timer"] <= 0:
 			owner.state_flags.erase("berserker_warcry")
-			owner.state_flags.erase("draw_texture_override")
-			owner.state_flags.erase("draw_texture_override_scale")
 			owner.defense = maxf(0.0, owner.defense - WAR_CRY_DEFENSE)
-	# ── 地裂（技能二二段）：踩碎地面动作计时，到时还原贴图 ──
-	var stomp: int = owner.state_flags.get("berserker_stomp", 0)
-	if stomp > 0:
-		stomp -= 1
-		owner.state_flags["berserker_stomp"] = stomp
-		if stomp <= 0:
-			owner.state_flags.erase("berserker_stomp")
-			owner.state_flags.erase("draw_texture_override")
-			owner.state_flags.erase("draw_texture_override_scale")
+			owner.set_animation_state("idle")
 	# ── 狂暴模式：全程霸体（无计时常驻），代价每秒 1 真实伤害（血量≤5 时停止，不会致死）──
 	if owner.state_flags.get("berserker_rage", false):
 		Fighter.set_super_armor(owner, 0)  # 持续到游戏结束
@@ -662,9 +828,9 @@ static func update_systems(owner: Fighter):
 			var dmg = floor(ult_state["dmg_acc"])
 			if dmg > 0:
 				ult_state["dmg_acc"] -= dmg
+				Fighter.apply_ult_damage_zone(owner, float(dmg), Color(0.85, 0.9, 1.0))
 				var enemy = GameWorld.get_opponent(owner)
 				if enemy and enemy.hp > 0:
-					Fighter.apply_damage(enemy, float(dmg), owner, false, Color(0.85, 0.9, 1.0), "hit_enemy", "ult", 0)
 					enemy.vy = -6                    # 被龙卷风卷起
 					enemy.vx = owner.facing * 4      # 向龙卷风方向撕扯
 		# 动画播放完毕由 overlay on_finish 回调清理 berserker_ult
@@ -719,6 +885,7 @@ static func _clean_axe(owner: Fighter):
 
 ## 连斩单段判定：攻击框含角色全身（可扫到身后敌人），命中后向自己身后击退
 static func _skill_slash(owner: Fighter, dmg: float):
+	GameWorld.trigger_shake(8.0, 12)  # 一技能连斩（每段）：屏幕震动
 	var target = GameWorld.get_opponent(owner)
 	if not target or target.hp <= 0:
 		return
@@ -732,15 +899,21 @@ static func _skill_slash(owner: Fighter, dmg: float):
 		target.vx = -owner.facing * 5.0  # 向狂战士身后击退
 		Fighter.emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 12, Color(1.0, 0.35, 0.0), 5, 7, "star", 0.9)
 
-## 连斩单段判定：斩击身前敌人
+## 连斩单段判定：判定框覆盖 身前 + 身中（碰撞体本身）+ 身后（双斧挥舞弧线）
 static func _do_slash(owner: Fighter, dmg: float, color: Color):
 	var target = GameWorld.get_opponent(owner)
 	if not target or target.hp <= 0:
 		return
-	var atk_box = owner.get_attack_box()
-	if atk_box.intersects(target.get_hit_box()):
+	if _get_normal_attack_box(owner).intersects(target.get_hit_box()):
 		Fighter.apply_damage(target, dmg, owner)
 		Fighter.emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 12, color, 5, 7, "star", 0.9)
+
+## 普攻判定框：身后延伸 ATK_BEHIND_REACH → 碰撞体本身（身中）→ 身前延伸 ATK_FRONT_REACH
+## 身中段让贴身/重叠的敌人也能被命中（纯身前判定时贴脸打不到）
+static func _get_normal_attack_box(owner: Fighter) -> Rect2:
+	var front = ATK_FRONT_REACH if owner.facing > 0 else ATK_BEHIND_REACH
+	var behind = ATK_BEHIND_REACH if owner.facing > 0 else ATK_FRONT_REACH
+	return Rect2(owner.pos_x - behind, owner.pos_y + 6, owner.w + behind + front, owner.h - 16)
 
 # ===== 地狱模式 AI（可选，默认走通用 AI） =====
 static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
@@ -781,3 +954,26 @@ static func ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
 
 static func ai_hell_desire(f: Fighter) -> Dictionary:
 	return {"min": 0, "max": 60}
+
+## 体系统：狂战士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	if f.state_flags.get("berserker_ult", false):
+		return Fighter.BODY_VAJRA  # 诸神黄昏
+	if f.state_flags.get("berserker_rage", false) or f.state_flags.get("berserker_warcry", false):
+		return Fighter.BODY_ARMOR  # 狂暴 / 战吼 = 霸体
+	if f.state_flags.get("berserker_parry", false):
+		return Fighter.BODY_SKILL  # 断筋斩招架
+	if f.image_state.begins_with("skill"):
+		return Fighter.BODY_SKILL  # 技能一/二 各段
+	return -1
+
+## 防御/招架类：断筋斩招架免疫打断
+static func is_defense_parry(f: Fighter) -> bool:
+	# 修复：berserker_parry 是 Dictionary，.get() 会返回它本身导致 bool 返回类型错误；
+	# 用 has() 判断招架状态是否激活
+	return f.state_flags.has("berserker_parry")
+
+## 被中断时：取消战吼演出
+static func on_interrupted(f: Fighter):
+	f.state_flags.erase("berserker_warcry")
+	f.state_flags["time_stop"] = false  # 中断时清除强化子技能时停标记
