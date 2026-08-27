@@ -16,12 +16,15 @@ var slash_x: float = 0
 var slash_y: float = 0
 var slash_facing: int = 1
 var slash_damage_dealt: bool = false
+var slash_anim = null  # FrameAnimation：普攻斩击动画（每刺客独立，避免同角色对局共享状态）
 var skill2_active: bool = false
 var skill2_timer: int = 0
 var skill2_x: float = 0
 var skill2_y: float = 0
 var skill2_facing: int = 1
 var skill2_damage_dealt: bool = false
+var skill2_delay_timer: int = 0      # 剑气延迟出现计时（帧）：释放后 N 帧生成
+var skill2_pending: Dictionary = {}  # 待生成的剑气数据
 var ult_active: bool = false
 var ult_timer: int = 0
 var ult_damage_timer: int = 0
@@ -32,7 +35,26 @@ var dodge_slow_mo: int = 0
 var shadow_trail: Array = []
 var max_shadow_trail: int = 12
 
+var _prev_dodge_success: bool = false  # 完美闪避状态跳变检测（触发演出用）
+var _dodge_zoom_pending: bool = false  # 时缓结束才恢复镜头（拉近期间不恢复，避免镜头乱晃）
+
+# 完美闪避演出参数（时缓 + 镜头拉近）
+const DODGE_SLOW_MO_FRAMES := 90  # 高强度时缓帧数（≈1.5s 实机）
+const DODGE_SLOW_MO_FACTOR := 6   # 时缓力度：6 倍慢速
+const DODGE_ZOOM := 1.3           # 镜头拉近倍率
+
 func update():
+	# 完美闪避演出：触发高强度时缓 + 设置镜头拉近目标。镜头缩放与位置由 game.gd _process
+	# 每渲染帧平滑推进（不受时缓减慢影响，不卡顿），时缓结束恢复常规取景
+	if dodge_success and not _prev_dodge_success and owner.is_player:
+		GameWorld.trigger_slow_motion(DODGE_SLOW_MO_FRAMES, DODGE_SLOW_MO_FACTOR)
+		GameWorld.zoom_character_centered(DODGE_ZOOM)
+		_dodge_zoom_pending = true
+	elif _dodge_zoom_pending:
+		if GameWorld.slow_mo_timer <= 0:
+			_dodge_zoom_pending = false
+			GameWorld.restore_camera_zoom()
+	_prev_dodge_success = dodge_success
 	if is_invincible and invincible_timer > 0:
 		invincible_timer -= 1
 		if invincible_timer <= 0:

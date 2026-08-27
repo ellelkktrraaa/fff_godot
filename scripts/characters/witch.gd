@@ -7,6 +7,9 @@ const PROJ_GRAVITY = preload("res://assets/fx_gravity_ball.png")
 const IMG_TORNADO = preload("res://assets/fx_tornado.png")
 const IMG_VORTEX = preload("res://assets/fx_vortex.png")
 const PROJ_METEOR = preload("res://assets/fx_meteor.png")
+# 龙卷/漩涡动画 sheet（5列网格；hurricane 17帧 单元768x1024，uzimaki 18帧 单元1024x768）
+const SHEET_HURRICANE = "res://assets/sheet_hurricane.png"
+const SHEET_UZIMAKI = "res://assets/sheet_uzimaki.png"
 const WITCH_ANI_DIR = "res://assets/char_ani/witch/"
 const WITCH_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/witch_idle_foot_gaps.gd")
 const WITCH_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/witch_skill2_foot_gaps.gd")
@@ -24,7 +27,7 @@ static func get_config() -> Dictionary:
 			"walk": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "walk/", "witch_walk_f_", [{"index": 1, "duration": 999.0}], true),
 			"jump": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "jump/", "witch_jump_f_", [{"index": 1, "duration": 999.0}], true),
 			"attack": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "attack/", "witch_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"skill2": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "skill2/sheet.png", 4, 3, 11, 0.1, false, _witch_skill2_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "skill2/sheet.png", 4, 3, 11, 0.1, true, _witch_skill2_anchors()),
 			"ult": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "ult/", "witch_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
 		"dex": {
@@ -98,13 +101,17 @@ static func _attack(owner: Fighter) -> Dictionary:
 static func _skill1(owner: Fighter) -> Dictionary:
 	var tx = owner.pos_x + (owner.w if owner.facing>0 else -120)
 	var ty = 260.0 # GROUND_Y - 120
-	GameWorld.tornadoes.append({"x":tx,"y":ty,"w":120,"h":160,"life":240,"timer":0,"damage":5,"tick_interval":60,"owner":owner,"type":"tornado","pull_strength":0.3,"img":IMG_TORNADO})
+	var t_anim = FrameAnimation.load_from_sprite_sheet(SHEET_HURRICANE, 5, 4, 17, 0.1, true)
+	t_anim.play()
+	GameWorld.tornadoes.append({"x":tx,"y":ty,"w":120,"h":160,"life":240,"timer":0,"damage":5,"tick_interval":60,"owner":owner,"type":"tornado","pull_strength":0.3,"img":IMG_TORNADO,"anim":t_anim})
 	return {"success": true}
 
 static func _skill2(owner: Fighter) -> Dictionary:
 	var vx = owner.pos_x - 40
 	var vy = 350.0 # GROUND_Y - 30
-	GameWorld.vortexes.append({"x":vx,"y":vy,"w":80,"h":30,"life":180,"timer":0,"damage":3,"tick_interval":30,"owner":owner,"type":"vortex","pull_strength":0.4,"img":IMG_VORTEX})
+	var v_anim = FrameAnimation.load_from_sprite_sheet(SHEET_UZIMAKI, 5, 4, 18, 0.1, true)
+	v_anim.play()
+	GameWorld.vortexes.append({"x":vx,"y":vy,"w":80,"h":30,"life":180,"timer":0,"damage":3,"tick_interval":30,"owner":owner,"type":"vortex","pull_strength":0.4,"img":IMG_VORTEX,"anim":v_anim})
 	owner.vy = -10
 	owner.grounded = false
 	return {"success": true}
@@ -117,7 +124,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 		return {"success": false}
 	var target_x = owner.pos_x + owner.w / 2
 	var dir = owner.facing if owner.facing != 0 else 1
-	GameWorld.projectiles.append({"x":target_x-200,"y":-500,"w":600,"h":600,"vx":1.0*dir,"vy":1.0,"life":300,"damage":40,"owner":owner,"type":"meteor","exploded":false,"img":PROJ_METEOR})
+	GameWorld.projectiles.append({"x":target_x-200,"y":-500,"w":600,"h":600,"vx":1.0*dir,"vy":1.0,"life":300,"damage":40,"owner":owner,"type":"meteor","exploded":false,"img":PROJ_METEOR,"priority":3})
 	witch_comp.is_casting_ult = true
 	witch_comp.ult_lock_timer = 30  # 0.5s 前摇冻结
 	witch_comp.cast_ult_x = target_x
@@ -133,6 +140,9 @@ static func update_global():
 		var t = GameWorld.tornadoes[i]
 		t["life"] -= 1
 		if t["life"] <= 0: GameWorld.tornadoes.remove_at(i); continue
+		var tanim: FrameAnimation = t.get("anim")
+		if tanim and tanim.is_playing():
+			tanim.update(1.0)
 		var target = GameWorld.get_opponent(t["owner"])
 		if target and target.hp > 0:
 			var dx2 = (t["x"]+t["w"]/2)-(target.pos_x+target.w/2)
@@ -147,11 +157,14 @@ static func update_global():
 				var ti = t.get("tick_interval", 60)
 				if t["timer"] >= ti:
 					t["timer"] = 0
-					Fighter.apply_damage(target, t["damage"], t["owner"], false)
+					Fighter.apply_damage(target, t["damage"], t["owner"], false, Color(1.0, 0.53, 0.27), "hit_enemy", "", 0, 1)  # 龙卷 = 技能体攻击
 	for i in range(GameWorld.vortexes.size()-1,-1,-1):
 		var v = GameWorld.vortexes[i]
 		v["life"] -= 1
 		if v["life"] <= 0: GameWorld.vortexes.remove_at(i); continue
+		var vanim: FrameAnimation = v.get("anim")
+		if vanim and vanim.is_playing():
+			vanim.update(1.0)
 		var target = GameWorld.get_opponent(v["owner"])
 		if target and target.hp > 0:
 			var dx2 = (v["x"]+v["w"]/2)-(target.pos_x+target.w/2)
@@ -166,28 +179,58 @@ static func update_global():
 				var ti = v.get("tick_interval", 30)
 				if v["timer"] >= ti:
 					v["timer"] = 0
-					Fighter.apply_damage(target, v["damage"], v["owner"], false)
+					Fighter.apply_damage(target, v["damage"], v["owner"], false, Color(1.0, 0.53, 0.27), "hit_enemy", "", 0, 1)  # 漩涡 = 技能体攻击
 
 # ── 绘制注入（龙卷风 + 漩涡渲染，从 game.gd 迁移至此）──
 static func _inject_draw():
 	GameWorld.register_draw_effect("witch_tornadoes", func(font, cam_x, _cam_y = 0.0):
 		var items: Array = []
 		for t in GameWorld.tornadoes:
+			var tex: Texture2D = null
+			var tanim: FrameAnimation = t.get("anim")
+			if tanim:
+				tex = tanim.get_current_texture()
+			if not tex:
+				tex = t.get("img")
 			var px = t["x"] - cam_x
 			if px > -t["w"] and px < Constants.W + t["w"]:
-				if t.has("img") and t["img"] is Texture2D:
-					items.append({"type": "tex", "tex": t["img"], "rect": Rect2(px, t["y"] - _cam_y, t["w"], t["h"]), "color": Color(1,1,1,0.8)})
+				if tex is Texture2D:
+					# hurricane 单元 768x1024 与实体 120x160 同宽高比，整格绘制无变形，龙卷底部自然贴地
+					items.append({"type": "tex", "tex": tex, "rect": Rect2(px, t["y"] - _cam_y, t["w"], t["h"]), "color": Color(1,1,1,0.8)})
 				else:
 					items.append({"type": "rect", "rect": Rect2(px, t["y"] - _cam_y, t["w"], t["h"]), "color": Color(0.533, 0.867, 1.0, 0.8)})
 		for v in GameWorld.vortexes:
-			var px = v["x"] - cam_x
-			if px > -v["w"] and px < Constants.W + v["w"]:
-				if v.has("img") and v["img"] is Texture2D:
-					items.append({"type": "tex", "tex": v["img"], "rect": Rect2(px, v["y"] - _cam_y, v["w"], v["h"]), "color": Color(1,1,1,0.8)})
+			var tex2: Texture2D = null
+			var vanim: FrameAnimation = v.get("anim")
+			if vanim:
+				tex2 = vanim.get_current_texture()
+			if not tex2:
+				tex2 = v.get("img")
+			var px2 = v["x"] - cam_x
+			if px2 > -v["w"] and px2 < Constants.W + v["w"]:
+				if tex2 is Texture2D:
+					# uzimaki 单元 1024x768：按单元宽高比绘制（宽=实体宽，高按比例），螺旋带贴地
+					var rect_h = v["w"] * 768.0 / 1024.0
+					items.append({"type": "tex", "tex": tex2, "rect": Rect2(px2, v["y"] - _cam_y + v["h"] - rect_h, v["w"], rect_h), "color": Color(1,1,1,0.8)})
 				else:
-					items.append({"type": "rect", "rect": Rect2(px, v["y"] - _cam_y, v["w"], v["h"]), "color": Color(0.467, 0.267, 0.667, 0.8)})
+					items.append({"type": "rect", "rect": Rect2(px2, v["y"] - _cam_y, v["w"], v["h"]), "color": Color(0.467, 0.267, 0.667, 0.8)})
 		return items
 	, 0)
+
+## 系统更新：动画帧推进 + 飞行模式播放 skill2（骑扫帚飞行）动画
+static func update_systems(f: Fighter):
+	# 多帧 sheet 动画需要每帧 update 才能换帧
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
+	var witch_comp: WitchComponent = f.components.get_component("witch") if f.components else null
+	if not witch_comp:
+		return
+	# 飞行模式：持续播放 skill2 飞行动画（循环）；大招施法/陨石悬停期间保持 ult 动画
+	if witch_comp.is_flying and not witch_comp.is_casting_ult and f.state != "ult":
+		if f.image_state != "skill2":
+			f.set_animation_state("skill2")
+	elif f.image_state == "skill2":
+		f.set_animation_state("idle")
 
 ## 输入处理（替代 input_handler.gd 中的 _input_witch）
 static func handle_input(owner: Fighter, keys: Dictionary) -> int:
@@ -246,3 +289,10 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 				keys.ult = false
 	Fighter.update_state(owner, mx)
 	return mx
+
+## 体系统：魔女状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: WitchComponent = f.components.get_component("witch") if f.components else null
+	if comp and comp.is_casting_ult:
+		return Fighter.BODY_VAJRA  # 陨星·寂灭悬停施法（陨石落地前）
+	return -1

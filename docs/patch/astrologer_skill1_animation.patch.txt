@@ -1,2 +1,0 @@
-# 本 patch 已作废（state 更名为 skill1_earth_pillar），请删除本文件。
-# 正确文件：docs/patch/astrologer_skill1_earth_pillar_animation.patch.txt

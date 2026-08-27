@@ -15,6 +15,10 @@ const EVOKER_ULT_CRACK = preload("res://assets/fx_evoker_ult_crack.png")
 
 const PROJ_FIREBALL = preload("res://assets/fx_fireball.png")
 const EVOKER_ANI_DIR = "res://assets/char_ani/evoker/"
+const EVOKER_SKILL2_SHEET = "res://assets/char_ani/evoker/idle/skill2/sheet.png"
+const EVOKER_SUMMON2_SKILL_SHEET = "res://assets/sheet_skeleton.png"
+const EVOKER_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/evoker_idle_foot_gaps.gd")
+const EVOKER_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/evoker_attack_foot_gaps.gd")
 
 # ── 绘制注入（每局游戏开始时重新注册）──
 static func _inject_draw():
@@ -26,7 +30,11 @@ static func _inject_draw():
 			match s["type"]:
 				0: tex = EVOKER_SERVANT1
 				1:
-					if s.get("action_timer", 0) > 0 and s.get("action_type") == "heavy":
+					# 骷髅 sheet 动画：待机(格1-2循环)/重击/魔令(格3-18挥镰) 都用动画当前帧
+					var s2_anim: FrameAnimation = s.get("anim")
+					if s2_anim:
+						tex = s2_anim.get_current_texture()
+					elif s.get("action_timer", 0) > 0 and s.get("action_type") == "heavy":
 						tex = EVOKER_SERVANT2_HEAVY
 					elif s.get("action_timer", 0) > 0 and s.get("action_type") == "skill":
 						tex = EVOKER_SERVANT2_SKILL
@@ -51,14 +59,44 @@ static func _inject_draw():
 			items.append({"type": "rect", "rect": Rect2(sx, s["y"]-10 - _cam_y, s["w"]*hp_pct, 6), "color": hc})
 			items.append({"type": "string", "pos": Vector2(sx+s["w"]/2, s["y"]-16 - _cam_y), "text": s.get("state",""), "size": 10, "color": Color.WHITE})
 		for fs in GameWorld.evoker_fire_seas:
-			items.append({"type": "tex", "tex": EVOKER_FIRE_SEA, "rect": Rect2(fs["x"]-cam_x, fs["y"]+60 - _cam_y, fs["w"], fs["h"]), "color": Color(1,1,1,0.7)})
+			var fs_anim: FrameAnimation = fs.get("anim")
+			var fs_tex: Texture2D = EVOKER_FIRE_SEA if fs_anim == null else fs_anim.get_current_texture()
+			if not fs_tex:
+				continue
+			var fs_w: float = fs["w"]
+			var fs_h: float = fs["h"]
+			var f_fx: float = fs["x"] - cam_x
+			var f_fy: float = fs["y"] + 60 - _cam_y
+			var f_dw: float = fs_w
+			var f_dh: float = fs_h
+			if fs_anim:
+				# 动画火海：整格贴图按宽度缩放；火焰内容底边在格内约 590/768 处，
+				# 将其对齐火海矩形底部（贴近地面），火焰从地面升起（整体下移 50px）
+				var f_scale: float = fs_w / maxf(float(fs_tex.get_width()), 1.0)
+				f_dw = fs_tex.get_width() * f_scale
+				f_dh = fs_tex.get_height() * f_scale
+				f_fx = fs["x"] + fs_w / 2.0 - f_dw / 2.0 - cam_x
+				f_fy = fs["y"] + fs_h - f_dh * (590.0 / 768.0) - _cam_y + 50.0
+			items.append({"type": "tex", "tex": fs_tex, "rect": Rect2(f_fx, f_fy, f_dw, f_dh), "color": Color(1,1,1,0.7)})
 		for b in GameWorld.gravity_balls:
 			items.append({"type": "tex", "tex": EVOKER_PULL_BALL, "rect": Rect2(b["x"]-cam_x, b["y"] - _cam_y, b["w"], b["h"])})
 		for rift in GameWorld.void_rifts:
-			var rx = rift["x"] - cam_x
-			items.append({"type": "tex", "tex": EVOKER_ULT_CRACK, "rect": Rect2(rx, rift["y"] - _cam_y, rift["w"], rift["h"]), "color": Color(1,1,1,0.7)})
+			var r_anim: FrameAnimation = rift.get("anim")
+			var r_tex: Texture2D = EVOKER_ULT_CRACK if r_anim == null else r_anim.get_current_texture()
+			if r_tex:
+				if r_anim:
+					# 动画裂隙：整格按 200px 宽绘制，居中于裂隙中心（动画代替原静态贴图）
+					var r_scale: float = 200.0 / maxf(float(r_tex.get_width()), 1.0)
+					var r_dw: float = r_tex.get_width() * r_scale
+					var r_dh: float = r_tex.get_height() * r_scale
+					var r_fx: float = rift["x"] + rift["w"] / 2.0 - r_dw / 2.0 - cam_x
+					var r_fy: float = rift["y"] + rift["h"] / 2.0 - r_dh / 2.0 - _cam_y
+					items.append({"type": "tex", "tex": r_tex, "rect": Rect2(r_fx, r_fy, r_dw, r_dh), "color": Color(1,1,1,0.8)})
+				else:
+					var rx = rift["x"] - cam_x
+					items.append({"type": "tex", "tex": EVOKER_ULT_CRACK, "rect": Rect2(rx, rift["y"] - _cam_y, rift["w"], rift["h"]), "color": Color(1,1,1,0.7)})
 			var pulse = sin(rift.get("timer",0)*0.1)*0.3+0.7
-			items.append({"type": "rect", "rect": Rect2(rx, rift["y"] - _cam_y, rift["w"], rift["h"]), "color": Color(0.784,0.392,1.0,pulse*0.8), "filled": false, "border_width": 3})
+			items.append({"type": "rect", "rect": Rect2(rift["x"] - cam_x, rift["y"] - _cam_y, rift["w"], rift["h"]), "color": Color(0.784,0.392,1.0,pulse*0.8), "filled": false, "border_width": 3})
 		return items
 	, 10)
 
@@ -71,10 +109,10 @@ static func get_config() -> Dictionary:
 		"fields": {"last_summon_type":-1,"summon_dead1":false,"summon_dead2":false,"summon_dead3":false},
 		"world_arrays": ["evoker_summons","void_rifts","evoker_fire_seas","gravity_balls","phantoms"],
 		"animations": {
-			"idle": FrameAnimation.load_from_frames(EVOKER_ANI_DIR + "idle/", "evoker_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(EVOKER_ANI_DIR + "walk/", "evoker_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(EVOKER_ANI_DIR + "jump/", "evoker_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(EVOKER_ANI_DIR + "attack/", "evoker_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"idle": FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _evoker_idle_anchors()),
+			"walk": FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.08, true, _evoker_idle_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(EVOKER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.3, _evoker_idle_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "attack/sheet.png", 3, 3, 8, 0.05, false, _evoker_attack_anchors()),
 			"ult": FrameAnimation.load_from_frames(EVOKER_ANI_DIR + "ult/", "evoker_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
 		"dex": {
@@ -114,6 +152,31 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+# ===== 多帧 sheet 动画锚点（由 scan_feet_offsets.py 数据组装）=====
+static func _evoker_idle_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_FOOT.size()):
+		anchors.append({
+			"foot_gap": EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_FOOT[i],
+			"head_gap": EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_HEAD[i],
+			"center_dx": EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_CENTER[i],
+			"content_w": EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_CONTENT_W[i],
+			"content_h": EVOKER_IDLE_FOOT_GAPS.EVOKER_IDLE_CONTENT_H[i],
+		})
+	return anchors
+
+static func _evoker_attack_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_FOOT[i],
+			"head_gap": EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_HEAD[i],
+			"center_dx": EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_CENTER[i],
+			"content_w": EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_CONTENT_W[i],
+			"content_h": EVOKER_ATTACK_FOOT_GAPS.EVOKER_ATTACK_CONTENT_H[i],
+		})
+	return anchors
 
 # Helper: find the owner's summon in GameWorld.evoker_summons
 static func _get_summon(owner: Fighter) -> Dictionary:
@@ -164,24 +227,9 @@ static func _attack(owner: Fighter) -> Dictionary:
 		owner.attack_cooldown = 120
 		owner.attacking = true
 		owner.attack_timer = 30
-		var fire_x = owner.pos_x + (30.0 if owner.facing > 0 else -30.0)
-		var fire_y = owner.pos_y + 20.0
-		GameWorld.projectiles.append({
-			"x": fire_x, "y": fire_y,
-			"w": 24.0, "h": 24.0,
-			"vx": 5.0 * owner.facing, "vy": -2.5,
-			"life": 90,
-			"damage": 4.0,
-			"owner": owner,
-			"type": "evoker_fireball",
-			"color": Color(1.0, 0.533, 0.0),
-			"reflected": false,
-			"gravity": 0.15,
-			"img": PROJ_FIREBALL,
-			"slowDuration": 360,
-			"burnDuration": 360,
-		})
-		Fighter.emit_particles(fire_x, fire_y, 10, Color(1.0, 0.533, 0.0), 3, 6)
+		owner.set_animation_state("attack")
+		# 火球不在起手瞬间生成：等普攻动画播到投掷帧（第 5 帧）再由 update_systems 出手
+		owner.set_meta("evoker_fire_pending", true)
 		return {"success": true}
 
 	# ---- 有召唤物 ----
@@ -205,6 +253,27 @@ static func _attack(owner: Fighter) -> Dictionary:
 
 	return {"success": false}
 
+## 生成冥炎弹（普攻动画第 5 帧投掷出手时调用，与画面同步）
+static func _fire_fireball(owner: Fighter):
+	var fire_x = owner.pos_x + (30.0 if owner.facing > 0 else -30.0)
+	var fire_y = owner.pos_y + 20.0
+	GameWorld.projectiles.append({
+		"x": fire_x, "y": fire_y,
+		"w": 24.0, "h": 24.0,
+		"vx": 5.0 * owner.facing, "vy": -2.5,
+		"life": 90,
+		"damage": 4.0,
+		"owner": owner,
+		"type": "evoker_fireball",
+		"color": Color(1.0, 0.533, 0.0),
+		"reflected": false,
+		"gravity": 0.15,
+		"img": PROJ_FIREBALL,
+		"slowDuration": 360,
+		"burnDuration": 360,
+	})
+	Fighter.emit_particles(fire_x, fire_y, 10, Color(1.0, 0.533, 0.0), 3, 6)
+
 # ---- Heavy attack by summon type (triggered by 役使·猎杀) ----
 static func _perform_heavy_attack(summon: Dictionary):
 	var owner: Fighter = summon["owner"]
@@ -213,6 +282,7 @@ static func _perform_heavy_attack(summon: Dictionary):
 		return
 
 	summon["action_type"] = "heavy"
+	GameWorld.trigger_shake(10.0, 12)  # 召唤物重击释放：屏幕中等震动
 	var st: int = summon["type"]
 	var cx: float = summon["x"] + summon["w"] / 2.0
 	var cy: float = summon["y"] + summon["h"] / 2.0
@@ -233,7 +303,7 @@ static func _perform_heavy_attack(summon: Dictionary):
 			summon["state"] = "猎杀"
 
 		1:
-			# 2号：向前突进斩（跨帧动画，由 onUpdate 推进）
+			# 2号：向前突进斩（16 帧挥镰动画，0.05s/帧 ≈ 0.8s）
 			summon["state"] = "突进"
 			var dir_to_enemy: float = signf(enemy.pos_x - summon["x"])
 			summon["dash_dir"] = int(dir_to_enemy) if dir_to_enemy != 0 else owner.facing
@@ -241,7 +311,10 @@ static func _perform_heavy_attack(summon: Dictionary):
 			summon["dash_hit"] = false
 			summon["vx"] = 0.0
 			summon["vy"] = 0.0
-			summon["action_timer"] = 20
+			summon["action_timer"] = 48
+			var h_anim: FrameAnimation = _servant2_skill_anim()
+			h_anim.play()  # 必须 play，否则 update() 不推进帧
+			summon["anim"] = h_anim
 
 		2:
 			# 3号：发射引力球
@@ -309,12 +382,21 @@ static func _skill1(owner: Fighter) -> Dictionary:
 		"hit_enemies": [],
 		"action_timer": 0,
 		"action_type": "",
+		"anim": null,
 		"flash_timer": 0,
 		"hit_cd": 0,
 		"dash_dir": 1,
 		"dash_timer": 0,
 		"dash_hit": false,
 	})
+
+	# 召唤物2：挂载骷髅 sheet 待机动画（格 1..2 循环），重击/魔令时临时切换到挥镰动画
+	if type_id == 1:
+		var s2_idle: FrameAnimation = _servant2_idle_anim()
+		s2_idle.play()
+		var s2_ref: Dictionary = GameWorld.evoker_summons[GameWorld.evoker_summons.size() - 1]
+		s2_ref["anim"] = s2_idle
+		s2_ref["idle_anim"] = s2_idle
 
 	if comp:
 		comp.last_summon_type = type_id
@@ -332,7 +414,9 @@ static func _skill2(owner: Fighter) -> Dictionary:
 	var summon = _get_summon(owner)
 
 	if summon.is_empty():
-		# ---- 幽蓝之境：在脚下生成大范围火海 ----
+		# ---- 幽蓝之境：在脚下生成大范围火海（16 帧火焰动画循环，火海持续期间持续燃烧）----
+		var sea_anim = FrameAnimation.load_from_sprite_sheet(EVOKER_SKILL2_SHEET, 4, 4, 16, 0.1, true)
+		sea_anim.play()  # 必须 play，否则 update() 不推进帧
 		GameWorld.evoker_fire_seas.append({
 			"x": owner.pos_x - 100.0,
 			"y": owner.pos_y - 40.0,
@@ -340,6 +424,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 			"timer": 0,
 			"duration": 240,
 			"owner": owner,
+			"anim": sea_anim,
 		})
 		Fighter.emit_particles(owner.pos_x, owner.pos_y, 30, Color(0.267, 0.533, 1.0), 5, 20)
 		return {"success": true}
@@ -349,6 +434,19 @@ static func _skill2(owner: Fighter) -> Dictionary:
 		return {"success": true}
 
 # ---- Summon skill by type (triggered by 魔令) ----
+## 加载召唤物2（哀恸枷锁）待机动画：sheet 格 1..2 共 2 帧循环（站姿）
+static func _servant2_idle_anim() -> FrameAnimation:
+	var anim = FrameAnimation.load_from_sprite_sheet(EVOKER_SUMMON2_SKILL_SHEET, 5, 4, 2, 0.5, true)
+	return anim
+
+## 加载召唤物2（哀恸枷锁）挥镰技能动画：sheet 5x4 网格，格 3..18 共 16 帧（前 2 格为待机不入动画）
+static func _servant2_skill_anim() -> FrameAnimation:
+	var anim = FrameAnimation.load_from_sprite_sheet(EVOKER_SUMMON2_SKILL_SHEET, 5, 4, 18, 0.05, false)
+	if anim.frames.size() >= 3:
+		anim.frames = anim.frames.slice(2, 18)  # 保留格 3..18 共 16 帧
+		anim._calc_total_duration()
+	return anim
+
 static func _perform_summon_skill(summon: Dictionary):
 	var owner: Fighter = summon["owner"]
 	var enemy: Fighter = GameWorld.get_opponent(owner)
@@ -375,7 +473,7 @@ static func _perform_summon_skill(summon: Dictionary):
 			summon["action_timer"] = 20
 
 		1:
-			# 2号：大范围斩击，伤害15+3，流血5秒
+			# 2号：大范围斩击，伤害15+3，流血5秒（16 帧挥镰动画，0.05s/帧 ≈ 0.8s）
 			var dx2 = enemy.pos_x + enemy.w / 2.0 - cx
 			var dy2 = enemy.pos_y + enemy.h / 2.0 - cy
 			var dist2 = sqrt(dx2 * dx2 + dy2 * dy2)
@@ -384,7 +482,10 @@ static func _perform_summon_skill(summon: Dictionary):
 				Fighter.apply_damage(enemy, 3, owner, false)
 				enemy.bleed_timer = 300
 				Fighter.emit_particles(cx, cy, 30, Color(1.0, 0.2, 0.2), 6, 20)
-			summon["action_timer"] = 20
+			summon["action_timer"] = 48
+			var s2_anim: FrameAnimation = _servant2_skill_anim()
+			s2_anim.play()  # 必须 play，否则 update() 不推进帧
+			summon["anim"] = s2_anim
 
 		2:
 			# 3号：突进撞击（瞬移），伤害20，失明3秒
@@ -403,16 +504,20 @@ static func _perform_summon_skill(summon: Dictionary):
 
 # ===== 大招：虚空裂隙 =====
 static func _ult(owner: Fighter) -> Dictionary:
+	# 防重复（裂隙存在期间不可重复释放）
+	for rift in GameWorld.void_rifts:
+		if rift.get("owner") == owner:
+			return {"success": false}
 	var summon = _get_summon(owner)
 	if summon.is_empty() or summon.get("hp", 0) <= 0:
 		return {"success": false}
 
-	# Transfer summon's remaining HP to owner
+	# 献祭召唤物：剩余血量转移给唤魔者
 	var transferred: int = int(summon["hp"])
 	var heal: float = minf(float(transferred), owner.max_hp - owner.hp)
 	Fighter.try_heal(owner, heal)
 
-	# Mark summon type as dead
+	# 标记召唤物类型死亡
 	var comp: EvokerComponent = owner.components.get_component("evoker") if owner.components else null
 	if comp:
 		match summon["type"]:
@@ -420,32 +525,68 @@ static func _ult(owner: Fighter) -> Dictionary:
 			1: comp.summon_dead2 = true
 			2: comp.summon_dead3 = true
 
-	# Create void rift at summon position
-	GameWorld.void_rifts.append({
-		"x": summon["x"] - 80.0,
-		"y": summon["y"] - 60.0,
-		"w": 160.0, "h": 120.0,
-		"duration": 240,
-		"timer": 0,
-		"owner": owner,
-	})
-
-	# Store summon position for particles before removing
+	# 记录召唤物位置（裂隙/法阵生成在死亡处）
 	var fx: float = summon["x"] + summon["w"] / 2.0
 	var fy: float = summon["y"] + summon["h"] / 2.0
 
-	# Remove summon from world
+	# 移除召唤物
 	for i in range(GameWorld.evoker_summons.size() - 1, -1, -1):
 		if GameWorld.evoker_summons[i].get("owner") == owner:
 			GameWorld.evoker_summons.remove_at(i)
 
+	# 虚空裂隙：动画即裂隙视觉（代替原静态贴图），无时停，
+	# 裂隙存在期间由 _update_void_rifts 持续「抓取 + 吸附 + 伤害」
+	var ult_anim = _load_ult_anim()
+	if ult_anim.frames.is_empty():
+		ult_anim = null  # 动画资源异常时退回静态裂隙贴图
+	_spawn_rift(owner, fx, fy, ult_anim)
+	if ult_anim:
+		ult_anim.play()  # 必须 play，否则 update() 不推进帧
+	GameWorld.trigger_shake(10.0, 12)  # 大招释放：屏幕中等震动
+
+	# 抓取：裂隙范围内敌人被拉到裂隙中心并定身（参考 Fighter.grab_fighter_in_rect）
+	var enemy: Fighter = GameWorld.get_opponent(owner)
+	if enemy and enemy.hp > 0:
+		var grab_rect := Rect2(fx - 220.0, enemy.pos_y - 100.0, 440.0, 200.0)
+		if Fighter.grab_fighter_in_rect(owner, grab_rect, fx):
+			Fighter.emit_particles(enemy.pos_x + enemy.w / 2.0, enemy.pos_y + enemy.h / 2.0, 20, Color(0.667, 0.267, 1.0), 5, 8, "star")
 	Fighter.emit_particles(fx, fy, 50, Color(0.667, 0.267, 1.0), 8, 10, "star")
 	return {"success": true}
+
+## 在指定位置生成虚空裂隙（动画作为裂隙视觉；无动画时用静态贴图；持续抓取+吸附+伤害）
+static func _spawn_rift(owner: Fighter, fx: float, fy: float, anim: FrameAnimation = null):
+	GameWorld.void_rifts.append({
+		"x": fx - 80.0,
+		"y": fy - 60.0,
+		"w": 160.0, "h": 120.0,
+		"duration": int(anim.total_duration * 60) if anim else 240,
+		"timer": 0,
+		"owner": owner,
+		"anim": anim,
+	})
+
+## 加载大招法阵动画（sheet.png 为 7x7 网格，前4格/后5格为空白帧，运行时剔除格 4..43 共 40 帧）
+static func _load_ult_anim() -> FrameAnimation:
+	var anim = FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "ult/sheet.png", 7, 7, 44, 0.1, false, [])
+	if anim.frames.size() > 4:
+		anim.frames = anim.frames.slice(4, 44)  # 保留格 4..43 共 40 帧
+		if anim.frames.size() > 1:
+			anim.frames[anim.frames.size() - 1].duration_seconds = 1.0
+		anim._calc_total_duration()
+	return anim
 
 # ===== Per-fighter 状态更新（从 evoker_system.gd 迁移至此）=====
 static func update_systems(f: Fighter):
 	if f.char_id != "evoker" or f.hp <= 0.0:
 		return
+	# 多帧 sprite-sheet 动画每帧推进（与玫瑰等角色一致，否则只显示第一帧）
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
+	# 普攻冥炎弹：动画播到第 5 帧（投掷出手）时生成，与画面同步
+	if f.attacking and f.get_meta("evoker_fire_pending", false):
+		if f.current_anim and f.current_anim.get_current_index() >= 4:
+			f.set_meta("evoker_fire_pending", false)
+			_fire_fireball(f)
 	# Slow timer
 	if f.slow_timer > 0:
 		f.slow_timer -= 1
@@ -483,6 +624,9 @@ static func update_global() -> void:
 static func _update_fire_seas() -> void:
 	for i in range(GameWorld.evoker_fire_seas.size() - 1, -1, -1):
 		var fs: Dictionary = GameWorld.evoker_fire_seas[i]
+		var fs_anim: FrameAnimation = fs.get("anim")
+		if fs_anim:
+			fs_anim.update(1.0)  # 推进火海动画帧
 		fs["timer"] = fs.get("timer", 0) + 1
 		if fs["timer"] >= fs.get("duration", 240):
 			GameWorld.evoker_fire_seas.remove_at(i)
@@ -498,7 +642,7 @@ static func _update_fire_seas() -> void:
 					var fs_w: float = fs.get("w", 0.0)
 					var fs_h: float = fs.get("h", 0.0)
 					if _rect_collision(enemy.pos_x, enemy.pos_y, enemy.w, enemy.h, fs_x, fs_y, fs_w, fs_h):
-						Fighter.apply_damage(enemy, 1.0, owner, false)
+						Fighter.apply_damage(enemy, 1.0, owner, false, Color(0.4, 0.6, 1.0), "hit_enemy", "", 0, 1)  # 幽蓝之径火海 = 技能体攻击
 						enemy.slow_timer = 12
 						enemy.slow_percent = 0.4
 
@@ -546,22 +690,43 @@ static func _update_gravity_balls() -> void:
 static func _update_void_rifts() -> void:
 	for i in range(GameWorld.void_rifts.size() - 1, -1, -1):
 		var rift: Dictionary = GameWorld.void_rifts[i]
+		# 推进裂隙动画帧（动画即裂隙视觉）
+		var rift_anim: FrameAnimation = rift.get("anim")
+		if rift_anim:
+			rift_anim.update(1.0)
 		rift["timer"] = rift.get("timer", 0) + 1
 		if rift["timer"] >= rift.get("duration", 240):
 			GameWorld.void_rifts.remove_at(i)
 			continue
-		# Damage every 6 frames
-		if rift["timer"] % 6 == 0:
-			var owner: Fighter = rift.get("owner") as Fighter
-			if owner:
-				var enemy: Fighter = GameWorld.get_opponent(owner)
-				if enemy and enemy.hp > 0.0:
+		# 抓取 + 吸附 + 伤害（无时停，实时生效）
+		var rift_owner: Fighter = rift.get("owner") as Fighter
+		if rift_owner:
+			var rift_enemy: Fighter = GameWorld.get_opponent(rift_owner)
+			if rift_enemy and rift_enemy.hp > 0.0:
+				var r_cx: float = rift.get("x", 0.0) + rift.get("w", 160.0) / 2.0
+				var r_cy: float = rift.get("y", 0.0) + rift.get("h", 120.0) / 2.0
+				var a_dx: float = r_cx - (rift_enemy.pos_x + rift_enemy.w / 2.0)
+				var a_dy: float = r_cy - (rift_enemy.pos_y + rift_enemy.h / 2.0)
+				var a_dist: float = sqrt(a_dx * a_dx + a_dy * a_dy)
+				if a_dist < 220.0 and not rift_enemy.is_invincible:
+					# 抓取：裂隙范围内敌人被定身在裂隙中心（参考 Fighter.hold_fighter_in_place）
+					rift_enemy.pos_x = clampf(r_cx - rift_enemy.w / 2.0, 10.0, 2390.0 - rift_enemy.w)
+					rift_enemy.pos_y = clampf(r_cy - rift_enemy.h / 2.0, 40.0, 380.0 - rift_enemy.h)
+					rift_enemy.vx = 0.0
+					rift_enemy.vy = 0.0
+				elif a_dist < 320.0 and a_dist > 0.1:
+					# 吸附：裂隙范围外敌人被持续拉向裂隙中心
+					rift_enemy.vx += (a_dx / a_dist) * 0.8
+					rift_enemy.vy += (a_dy / a_dist) * 0.8
+				# 伤害：裂隙矩形范围内每 6 帧 1 点（10/秒）
+				if rift["timer"] % 6 == 0:
 					var r_x: float = rift.get("x", 0.0)
 					var r_y: float = rift.get("y", 0.0)
 					var r_w: float = rift.get("w", 0.0)
 					var r_h: float = rift.get("h", 0.0)
-					if _rect_collision(enemy.pos_x, enemy.pos_y, enemy.w, enemy.h, r_x, r_y, r_w, r_h):
-						Fighter.apply_damage(enemy, 1.0, owner, false)
+					if _rect_collision(rift_enemy.pos_x, rift_enemy.pos_y, rift_enemy.w, rift_enemy.h, r_x, r_y, r_w, r_h):
+						# 裂隙伤害按抓取结算：打断除金刚体外一切技能
+						Fighter.apply_damage(rift_enemy, 1.0, rift_owner, false, Color(0.53, 0.27, 0.8), "hit_enemy", "grab")
 
 # ===== Summon state machine =====
 static func _update_summons() -> void:
@@ -591,6 +756,15 @@ static func _update_summons() -> void:
 		# Action timer
 		if summon.get("action_timer", 0) > 0:
 			summon["action_timer"] = summon["action_timer"] - 1
+		# 动作动画推进（挥镰技能等）；动作结束回到待机动画（若有）
+		var sum_anim: FrameAnimation = summon.get("anim")
+		if sum_anim:
+			sum_anim.update(1.0)
+			if summon.get("action_timer", 0) <= 0:
+				var sum_idle: FrameAnimation = summon.get("idle_anim")
+				summon["anim"] = sum_idle
+				if sum_idle and not sum_idle.is_playing():
+					sum_idle.play()
 		# Flash timer
 		if summon.get("flash_timer", 0) > 0:
 			summon["flash_timer"] = summon["flash_timer"] - 1

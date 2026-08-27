@@ -207,18 +207,32 @@ static func _make_void_affinity(f) -> TalentInstance:
 	return inst
 
 ## 奥术涌流 — 主动天赋（被动+5%能量回复，释放回复40能量，冷却30s）
+## 【黑法师专属】携带时变为「黑暗能量」：能量消耗 -50%（1 黑暗能量 = 2 能量），
+## 释放：震飞周围敌人(5伤) + 恢复 40 黑暗能量 + 一技能冷却 -3s，冷却 50s
 static func _make_arcane_surge(f) -> TalentInstance:
 	const CD := 1800        # 冷却帧数（30 秒）
+	const BM_CD := 3000     # 黑法师黑暗能量冷却帧数（50 秒）
 	const BURST_ENERGY := 40  # 释放回复能量
+	const BM_RADIUS := 100.0  # 黑暗能量震飞半径
+	const BM_DAMAGE := 5.0    # 黑暗能量震飞伤害
+	const BM_SKILL1_CD_CUT := 180  # 一技能冷却立刻减少帧数（3 秒）
+
+	var is_bm: bool = f.char_id == "black_mage"
 
 	var inst = TalentInstance.new()
-	inst.talent_name = "奥术涌流"
-	inst.description = "主动 · 不可叠加"
+	if is_bm:
+		inst.talent_name = "黑暗能量"
+		inst.description = "黑法师专属 · 主动 · 不可叠加\n被动：能量回复速度 +5% ｜ 能量消耗 -50%（1 黑暗能量 = 2 能量）\n释放：震飞周围敌人(5伤) + 恢复 40 黑暗能量 + 一技能冷却 -3s\n冷却：50 秒"
+	else:
+		inst.talent_name = "奥术涌流"
+		inst.description = "主动 · 不可叠加"
 	inst.is_skill = true
 
-	# ── 被动：能量回复速度 +5% ──
+	# ── 被动：能量回复速度 +5%（黑法师额外激活黑暗能量体系）──
 	inst.on_attach = func():
 		f.energy_regen *= 1.05
+		if is_bm:
+			f.energy_cost_multiplier = 0.5  # 黑暗能量：消耗为普通能量的一半
 
 	# ── 主动状态 ──
 	f.ad["arcane_surge"] = {"cd": 0}
@@ -231,11 +245,33 @@ static func _make_arcane_surge(f) -> TalentInstance:
 		if state["cd"] > 0:
 			return {"success": false}
 
-		state["cd"] = CD
-		f.energy = minf(f.max_energy, f.energy + BURST_ENERGY)
-
-		# 释放粒子特效（奥术蓝光）
-		Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 20, Color(0.3, 0.5, 1.0), 6, 10, "star")
+		state["cd"] = BM_CD if is_bm else CD
+		if is_bm:
+			# ── 黑暗能量：震飞周围敌人（5伤）──
+			var enemy = GameWorld.get_opponent(f)
+			if enemy and enemy.hp > 0:
+				var cx: float = f.pos_x + f.w / 2.0
+				var cy: float = f.pos_y + f.h / 2.0
+				var ex: float = enemy.pos_x + enemy.w / 2.0
+				var ey: float = enemy.pos_y + enemy.h / 2.0
+				var dx: float = ex - cx
+				var dy: float = ey - cy
+				if dx * dx + dy * dy <= BM_RADIUS * BM_RADIUS:
+					Fighter.apply_damage(enemy, BM_DAMAGE, f, false, Color(0.3, 0.2, 0.5), "hit_enemy", "talent", 0)
+					enemy.vy = -6
+					enemy.vx = (1 if dx >= 0 else -1) * 5
+					enemy.grounded = false
+			# 恢复 40 黑暗能量 + 一技能冷却 -3s
+			f.energy = minf(f.max_energy, f.energy + BURST_ENERGY)
+			var s1 = f.get_skill("skill1")
+			if s1:
+				s1.cd = maxi(0, s1.cd - BM_SKILL1_CD_CUT)
+			# 黑色（暗紫黑）粒子
+			Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 25, Color(0.15, 0.1, 0.25), 7, 10, "star", 1.2)
+		else:
+			# ── 奥术涌流：瞬间回复 40 能量（奥术蓝光）──
+			f.energy = minf(f.max_energy, f.energy + BURST_ENERGY)
+			Fighter.emit_particles(f.pos_x + f.w / 2.0, f.pos_y + f.h / 2.0, 20, Color(0.3, 0.5, 1.0), 6, 10, "star")
 		return {"success": true}
 
 	inst.update = func():
@@ -459,6 +495,9 @@ static func _make_last_stand(f) -> TalentInstance:
 ## 开局损失 60 血（可触发浴血）、每 5s 获得 1s 无敌、
 ## 首次血量低于 20 强制锁定为 20 持续 10s、狂暴状态免除每秒真伤
 static func _make_broken_boat(f) -> TalentInstance:
+	# 不可叠加：已携带破釜沉舟时，再次选取不生效（防止重复扣血 / 重复无敌循环）
+	if f.ad.has("broken_boat"):
+		return null
 	const START_HP_COST := 60.0      # 开局损失血量
 	const INVULN_INTERVAL := 300     # 无敌间隔：5 秒（60fps）
 	const INVULN_DURATION := 60      # 无敌持续：1 秒

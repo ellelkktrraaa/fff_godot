@@ -20,6 +20,12 @@ func on_damage_received(attacker: Fighter, dmg: float):
 	for comp in components.values():
 		comp.on_damage_received(attacker, dmg)
 
+func on_pre_damage(attacker: Fighter, dmg: float) -> float:
+	var d = dmg
+	for comp in components.values():
+		d = comp.on_pre_damage(attacker, d)
+	return d
+
 func on_attack_hit(target: Fighter, dmg: float):
 	for comp in components.values():
 		comp.on_attack_hit(target, dmg)

@@ -524,6 +524,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	GameWorld.active_overlays.append({
 		"anim": ult_anim,
 		"position": {"type": "fullscreen"},
+		"owner": owner,
 		"overlay_id": "necro_ult",
 		"on_finish": func():
 			comp.ult_active = false
@@ -549,9 +550,7 @@ static func _update_ult(owner: Fighter):
 		comp.ult_damage_acc += DAMAGE_PER_TICK
 		var dmg = floori(comp.ult_damage_acc)
 		if dmg > 0:
-			var enemy = GameWorld.get_opponent(owner)
-			if enemy and enemy.hp > 0:
-				Fighter.apply_damage(enemy, float(dmg), owner, false, Color(0.2, 0.3, 0.8), "hit_enemy", "ult", 0)
+			Fighter.apply_ult_damage_zone(owner, float(dmg), Color(0.2, 0.3, 0.8))
 			comp.ult_damage_acc -= dmg
 	# overlay 动画结束后由 on_finish 回调清理 ult_active
 
@@ -775,3 +774,20 @@ static func ai_hell_desire(f: Fighter) -> Dictionary:
 	if _is_mounted(f):
 		return {"min": 0, "max": 60}  # 骑乘冲阵贴脸
 	return {"min": 0, "max": 80}
+
+## 体系统：死灵骑士状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: NecroKnightComponent = f.components.get_component("necro_knight") if f.components else null
+	if comp and comp.ult_active:
+		return Fighter.BODY_VAJRA  # 冥界降临
+	if comp and comp.is_mounted():
+		return Fighter.BODY_ARMOR  # 骑乘形态 = 霸体
+	if comp and comp.skill1_pull_active:
+		return Fighter.BODY_SKILL  # 亡者进军·灵魂牵制
+	return -1
+
+## 被中断时：取消技能1吸附
+static func on_interrupted(f: Fighter):
+	var comp: NecroKnightComponent = f.components.get_component("necro_knight") if f.components else null
+	if comp:
+		comp.skill1_pull_active = false

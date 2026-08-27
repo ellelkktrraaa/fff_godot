@@ -9,6 +9,8 @@ var slow_factor: float
 var tick_interval: int
 var tick_damage: float
 var ticks_since_last: int = 0
+var stacks: int = 1  # 叠加层数（如黑法师冰棱减速 10%×层数）
+var defense_reduction: float = 0.0  # 破冰 debuff 扣除的防御值（到期恢复）
 
 static var STATUS_DEFS := {
 	"burn": {
@@ -44,6 +46,18 @@ static var STATUS_DEFS := {
 	"warcry_lock": {
 		"id": "warcry_lock", "duration": 60, "vfx_color": Color(0.9, 0.7, 0.3),
 		"freeze": true,  # 战吼震慑：移动失灵 1s
+	},
+	"bm_ice_slow": {
+		"id": "bm_ice_slow", "duration": 180, "vfx_color": Color(0.53, 0.87, 1.0),
+		"slow_factor": 0.9,  # 黑法师冰棱减速：每层 10%（stacks 叠加，可至 4 层 40%）
+	},
+	"bm_burn": {
+		"id": "bm_burn", "duration": 300, "vfx_color": Color(1.0, 0.53, 0.27),
+		"tick_damage": 1.0, "tick_interval": 60,  # 黑法师灰烬火球灼烧：1/s，持续 5s
+	},
+	"bm_ice_break": {
+		"id": "bm_ice_break", "duration": 300, "vfx_color": Color(0.53, 0.87, 1.0),
+		# 黑法师破冰：冰冻目标被普攻命中 → 立即解冻 + 防御 -30%（持续 5s）
 	},
 }
 
@@ -81,6 +95,9 @@ func apply(target):
 			target.defense += 12.5  # 防御 +12.5（护甲公式等效减伤 20%）
 		"tendon_cut":
 			target.jump_reduction = minf(target.jump_reduction, 0.4)  # 跳跃高度减少 60%
+		"bm_ice_break":
+			defense_reduction = target.defense * 0.3  # 破冰：防御力 -30%
+			target.defense -= defense_reduction
 
 # Called each tick when tick_damage > 0 and tick_interval matched
 func _handle_tick(target: Fighter):
@@ -91,6 +108,12 @@ func _handle_tick(target: Fighter):
 			target.hp = maxf(0, target.hp - 0.5)
 			target.damage_flash = 10
 			target.emit_particles(target.pos_x + target.w / 2, target.pos_y + target.h / 2, 10, Color(1.0, 0.27, 0.27), 2, 4, "circle", 0.5)
+		"bm_burn":
+			if target.hp <= 0:
+				return
+			target.hp = maxf(0, target.hp - tick_damage)  # 1/s 灼烧（黑法师灰烬火球）
+			target.damage_flash = 10
+			target.emit_particles(target.pos_x + target.w / 2, target.pos_y + target.h / 2, 10, Color(1.0, 0.53, 0.27), 2, 4, "circle", 0.5)
 
 # Called when the status expires
 func _handle_expire(target):
@@ -105,6 +128,8 @@ func _handle_expire(target):
 			target.defense = maxf(0.0, target.defense - 12.5)
 		"tendon_cut":
 			target.jump_reduction = 1.0
+		"bm_ice_break":
+			target.defense += defense_reduction  # 破冰 debuff 到期恢复防御
 
 func update(target: Fighter) -> bool:
 	timer -= 1

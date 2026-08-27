@@ -16,4 +16,4 @@ static func update_flame_zones():
 					f["timer"] = 0
 					# 龙骑士免疫火焰区域伤害
 					if target.char_id != "dragon_knight":
-						Fighter.apply_damage(target, f["damage"], f["owner"], false)
+						Fighter.apply_damage(target, f["damage"], f["owner"], false, Color(1.0, 0.53, 0.27), "hit_enemy", "domain", 0, 1)  # 幽蓝之径火海 = 技能体攻击

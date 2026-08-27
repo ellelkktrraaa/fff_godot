@@ -1,10 +1,33 @@
 class_name RenderSystem
 
 ## 调试：按 F2 切换是否绘制碰撞体边框（默认关闭）
-static var debug_draw_hitboxes: bool = true
+static var debug_draw_hitboxes: bool = false
 
 const SHIELD_IMG = preload("res://assets/fx_shield.png")
 const FLAME_IMG = preload("res://assets/fx_flame.png")
+
+# 黑白滤镜（canvas_item 着色器）：高对比黑白二值化——以 0.5 亮度为界，阴影近纯黑、高光近纯白
+static var _grayscale_shader: Shader = null
+static var _grayscale_mat: ShaderMaterial = null
+
+static func _ensure_grayscale_material() -> ShaderMaterial:
+	if _grayscale_mat == null:
+		_grayscale_shader = Shader.new()
+		_grayscale_shader.code = "shader_type canvas_item;\n" \
+			+ "uniform float strength : hint_range(0.0, 1.0) = 1.0;\n" \
+			+ "uniform float contrast : hint_range(0.0, 100.0) = 20.0;\n" \
+			+ "void fragment() {\n" \
+			+ "	vec3 c = COLOR.rgb;\n" \
+			+ "	float lum = dot(c, vec3(0.299, 0.587, 0.114));\n" \
+			+ "	// 对比度 0~100：100=硬黑白二分（step）；0=柔和灰阶；20=保留较多中间调\n" \
+			+ "	float half_w = 0.4 * (1.0 - contrast / 100.0);\n" \
+			+ "	float bw = smoothstep(0.5 - half_w, 0.5 + half_w, lum);\n" \
+			+ "	c = mix(c, vec3(bw), strength);\n" \
+			+ "	COLOR.rgb = c;\n" \
+			+ "}\n"
+		_grayscale_mat = ShaderMaterial.new()
+		_grayscale_mat.shader = _grayscale_shader
+	return _grayscale_mat
 
 ## 入口：绘制整帧
 static func draw_frame(game_node: CanvasItem):
@@ -132,15 +155,18 @@ static func draw_frame(game_node: CanvasItem):
 				var sc: Vector2 = pos.get("scale", Vector2.ONE)
 				game_node.draw_texture_rect(tex, Rect2(wx, wy, tex.get_width() * sc.x, tex.get_height() * sc.y), false)
 
-	# ═══ 屏幕空间（抵消1.375x镜头缩放）═══
-	game_node.draw_set_transform(Vector2.ZERO, 0.0, Vector2(0.727, 0.727))
+	# ═══ 屏幕空间（抵消镜头缩放：基准 1.375x × 拉近倍率）═══
+	var _screen_comp := 1.0 / (GameWorld.CAMERA_BASE_SCALE * GameWorld.camera_zoom)
+	game_node.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_screen_comp, _screen_comp))
 
-	# 11. 屏幕空间绘制回调
+	# 11. 屏幕空间绘制回调（top_layer 的留到全屏 Overlay 之后，保证 HUD 常驻元素不被全屏动画遮挡）
 	for entry in GameWorld.draw_effect_callbacks:
 		if not entry is Dictionary:
 			continue
 		var e_dict2: Dictionary = entry
 		if not e_dict2.get("screen_space", false):
+			continue
+		if e_dict2.get("top_layer", false):
 			continue
 		var cb2: Callable = e_dict2.get("cb")
 		if not (cb2 and cb2.is_valid()):
@@ -172,6 +198,21 @@ static func draw_frame(game_node: CanvasItem):
 		var border_alpha = 0.3 + sin(progress * PI * 6) * 0.2
 		game_node.draw_rect(Rect2(0, 0, Constants.W, Constants.H), Color(border_color.r, border_color.g, border_color.b, border_alpha), false, 8)
 
+	# 12b. 顶层屏幕空间绘制回调（全屏 Overlay 之上：千峰破云图标等 HUD 常驻元素）
+	for entry in GameWorld.draw_effect_callbacks:
+		if not entry is Dictionary:
+			continue
+		var e_top: Dictionary = entry
+		if not e_top.get("screen_space", false) or not e_top.get("top_layer", false):
+			continue
+		var cb_top: Callable = e_top.get("cb")
+		if not (cb_top and cb_top.is_valid()):
+			continue
+		var items_top: Array = cb_top.call(font, cam_x, cam_y)
+		if items_top == null: continue
+		for item in items_top:
+			_exec_draw_item(game_node, item, font)
+
 	# 13. 减速滤镜
 	var dodge_slow = false
 	for f in GameWorld.entities:
@@ -182,6 +223,22 @@ static func draw_frame(game_node: CanvasItem):
 			break
 	if dodge_slow or GameWorld.slow_mo_timer > 0:
 		game_node.draw_rect(Rect2(0, 0, Constants.W, Constants.H), Color(0.471, 0.314, 0.784, 0.12))
+
+	# 13b. 黑白滤镜（整帧高对比黑白着色器）
+	# [FX-ENHANCE] 灰度渐入渐出：三角波 0→1→0（渐入→满强度→渐出），消除"瞬间闪黑白/硬切回彩色"
+	if GameWorld.grayscale_timer > 0:
+		var gs_mat = _ensure_grayscale_material()
+		# 三角波：0→1→0（渐入渐出），t 用 grayscale_total 归一化剩余时长
+		var t := float(GameWorld.grayscale_timer) / float(maxi(GameWorld.grayscale_total, 1))
+		var strength := 1.0 - absf(2.0 * t - 1.0)
+		strength = clampf(strength, 0.0, 1.0)
+		# [FX-ENHANCE] smoothstep 缓入缓出增强，两端更柔和
+		strength = strength * strength * (3.0 - 2.0 * strength)
+		gs_mat.set_shader_parameter("strength", strength)
+		gs_mat.set_shader_parameter("contrast", 20.0)
+		game_node.material = gs_mat
+	else:
+		game_node.material = null
 
 	# 14. HUD
 	HudSystem.draw(game_node, font)
@@ -284,15 +341,21 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 		var img_scale = f.config.get("image_scale", 1.0)
 		if f.attacking and f.config.has("attack_image_scale"):
 			img_scale = f.config.get("attack_image_scale")
+		elif f.dashing and f.config.has("dash_image_scale"):
+			img_scale = f.config.get("dash_image_scale")
 		# draw_texture_override 贴图可叠加独立缩放系数
 		if f.state_flags.has("draw_texture_override"):
 			img_scale *= f.state_flags.get("draw_texture_override_scale", 1.0)
+		# draw_texture_override 贴图可叠加垂直偏移（如影武者后撤贴图下移 30px）
+		var override_offset_y := 0.0
+		if f.state_flags.has("draw_texture_override"):
+			override_offset_y = f.state_flags.get("draw_texture_override_offset_y", 0.0)
 
 		# 默认：整帧缩放 + 居中 + 帧底对齐（兼容无锚点的旧贴图）
 		var scale = minf(f.w / tw, f.h / th) * img_scale
 		tw *= scale; th *= scale
 		var tx = px + (f.w - tw) / 2.0
-		var ty = py + f.h - th + f.config.get("image_offset_y", 0.0)
+		var ty = py + f.h - th + f.config.get("image_offset_y", 0.0) + override_offset_y
 
 		# 锚点对齐：当前动画帧带锚点数据时，按 内容中轴/脚底/内容高度 统一呈现
 		if anim:
@@ -309,13 +372,26 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 				# 锚点对齐：统一身高 = 内容实际高度(content_h) → 碰撞体高度(f.h)。
 				# 注意：不再乘 img_scale —— 那是无锚点旧贴图时代的整帧手调系数，
 				# 锚点数据已包含内容真实尺寸，再乘 img_scale 会双重缩放导致大小不对。
-				scale = f.h / float(content_h)
+				# anim_scale：锚点动画专属缩放系数（默认 1.0），仅对显式配置的角色生效。
+				# 统一缩放基准：用动画的参考内容高度（中位数），避免跳跃等动作各帧
+				# content_h 差异大（如 413→629）被逐帧归一化导致角色忽大忽小。
+				var ref_h: float = anim.content_h_ref if anim.content_h_ref > 0 else content_h
+				scale = f.h / float(ref_h) * f.config.get("anim_scale", 1.0)
+				# 按动画状态区分的独立缩放（anim_scale_states: {image_state: 倍率}），
+				# 用于单个技能动画放大（如断筋斩 1.8×），不影响角色其他动画。
+				scale *= float(f.config.get("anim_scale_states", {}).get(f.image_state, 1.0))
+				# draw_texture_override 贴图分辨率常与动画帧不同（如连斩 2048×2048），
+				# 锚点路径下也要叠加独立缩放系数，否则 override 贴图按动画 content_h 缩放会过大。
+				if f.state_flags.has("draw_texture_override"):
+					scale *= f.state_flags.get("draw_texture_override_scale", 1.0)
 				tw = tex.get_width() * scale
 				th = tex.get_height() * scale
 				# 内容中轴对齐碰撞体中心（减去内容相对帧中心线的水平偏移）
-				tx = px + f.w / 2.0 - tw / 2.0 - center_dx * scale
+				# facing<0 时贴图整体翻转，center_dx 需取反，否则镜像后内容中轴偏 2×|center_dx|（向左动画靠后/位移感）
+				var cd: float = center_dx if f.facing > 0 else -center_dx
+				tx = px + f.w / 2.0 - tw / 2.0 - cd * scale
 				# 脚底对齐碰撞体底部（图片底边比脚底低 foot_gap，需下移）
-				ty = py + f.h - th + foot_gap * scale + f.config.get("image_offset_y", 0.0)
+				ty = py + f.h - th + foot_gap * scale + f.config.get("image_offset_y", 0.0) + override_offset_y
 
 		if f.facing < 0:
 			game_node.draw_set_transform(Vector2(tx + tw, ty), 0.0, Vector2(-1, 1))
@@ -381,13 +457,15 @@ static func _draw_projectiles(game_node: CanvasItem, cam_x: float, cam_y: float)
 			continue
 		var pc = pd.get("color", Color(0.533, 0.867, 1.0))
 		var pimg = pd.get("img")
-		if pimg is Texture2D:
+		# 支持动画投射物：img 为 FrameAnimation 时画当前帧
+		var ptex: Texture2D = pimg.get_current_texture() if pimg is FrameAnimation else pimg
+		if ptex is Texture2D:
 			if pd.get("vx", 0) < 0:
 				game_node.draw_set_transform(Vector2(px + pd["w"], py), 0.0, Vector2(-1, 1))
-				game_node.draw_texture_rect(pimg, Rect2(0, 0, pd["w"], pd["h"]), false, Color(1,1,1,0.8))
+				game_node.draw_texture_rect(ptex, Rect2(0, 0, pd["w"], pd["h"]), false, Color(1,1,1,0.8))
 				game_node.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			else:
-				game_node.draw_texture_rect(pimg, Rect2(px, py, pd["w"], pd["h"]), false, Color(1,1,1,0.8))
+				game_node.draw_texture_rect(ptex, Rect2(px, py, pd["w"], pd["h"]), false, Color(1,1,1,0.8))
 		else:
 			game_node.draw_rect(Rect2(px, py, pd["w"], pd["h"]), pc)
 			game_node.draw_rect(Rect2(px + 4, py + 4, pd["w"] - 8, pd["h"] - 8), Color.WHITE)

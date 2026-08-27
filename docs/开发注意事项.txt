@@ -1,0 +1,237 @@
+========================================
+剑豪（kensai）开发踩坑记录
+========================================
+记录开发剑豪过程中遇到并修复的所有问题，便于以后排查。
+
+说明：动画帧与游戏帧换算 = 动画帧数 × 每帧秒数 × 60fps。
+FrameAnimation.update(1) 每游戏帧推进 1/60 秒。
+
+--------------------------------------------------------
+一、素材/动画接入类
+--------------------------------------------------------
+
+[1] 玄鸟衔月闪显示为蓝色色块
+    现象：释放二技能，剑豪位置出现蓝色默认色块，无动画。
+    根因：动画路径写错——KENSAI_ANI_DIR + "skill1/sheet.png"，
+          但素材目录实际是 skill_2（skill1 目录不存在）。
+          纹理加载失败 → Godot 渲染默认蓝色块。
+    修复：路径改为 skill_2/sheet.png（网格 5×4、每格 1024×768，
+          与 kensai_skill1_foot_gaps 锚点完全一致）。
+    教训：接素材先核对目录名/网格/锚点三要素，与锚点文件一致。
+
+[2] 千枫落华斩播放太快
+    现象：一技能全屏动画 1.8 秒播完，太快。
+    根因：QFLH_FRAME_DUR = 0.05s/帧（36 帧 → 1.8s）。
+    修复：0.05 → 0.08 → 0.1（最终值，总 3.6s），QFLH_TOTAL_FRAMES
+          150 → 180 → 220 与动画时长对齐。
+
+[3] 千枫落华斩总伤膨胀到约 58（应 12）
+    现象：一技能总伤远高于设计值 12。
+    根因：按"游戏帧"每帧累计 12/36≈0.33 伤，但 36 帧动画实际播放
+          约 173 游戏帧（0.08s×36×60）→ 总伤膨胀。
+    修复：改为按"动画帧"累计——动画推进到新动画帧（qidx != last）
+          才累计一次，36 动画帧正好 12 伤。
+    教训：overlay 动画按游戏帧推进，出伤计数必须用动画帧索引，
+          不能直接用游戏帧累加。
+
+[4] 大招动画 2 倍速
+    现象：孤鸿踏雪全屏动画播放速度加倍。
+    根因：_ult 里 owner.config["animations"]["ult"] = ult_anim，
+          剑豪 current_anim 与全屏 overlay 共用同一动画对象，
+          两处同时 update() → 双推进 2 倍速。
+    修复：移除 config 覆盖；overlay 用独立新建对象，剑豪本体
+          skip_fighter_draw 隐藏。
+
+[5] 大招出伤 39 而非 40
+    现象：大招总伤少 1。
+    根因：每游戏帧累加 40/283，浮点误差 283×(40/283)=39.999…，
+          floor 取整漏掉最后 1 伤。
+    修复：期望值法——按已过帧数应造成的整伤数出伤
+          (floori(TOTAL×timer/WINDOW) - 已出)，无累计误差。
+
+[6] 大招打不到人
+    现象：释放大招后敌人不掉血。
+    根因：大招演出期间剑豪不无敌，被 AI 反击打死 →
+          update_systems 开头 hp<=0 直接 return → 出伤中断。
+    修复：_ult 释放时 set_invincible，on_finish clear_invincible。
+    注意：若敌人处于无敌/格挡/护盾/已死状态，apply_damage 会正常
+          免疫，这是游戏机制而非 bug。
+
+--------------------------------------------------------
+二、动画状态机 / 移动锁定类
+--------------------------------------------------------
+
+[7] 释放完二技能不能动（第一次修复）
+    现象：玄鸟衔月闪播完后剑豪永久锁移动。
+    根因：skill1_active 清除逻辑写在 `if s1a.is_playing():` 块内，
+          动画结束后 is_playing()=false → 清除永远不执行。
+    修复：结束清除移出 is_playing 块外（用 is_finished 判断）。
+
+[8] 释放完二技能不能动（真根因，第二次修复）
+    现象：完整游戏循环下释放二技能后仍不能动。
+    根因：_skill1 设了 owner.attacking = true →
+          fighter.apply_physics 的 attacking 分支把 image_state
+          覆盖成 "attack" → 技能动画被替换 → skill1_anim 不再被
+          推进 → 永不 finished → skill1_active 永不清除。
+          （fighter.gd 里 image_state.begins_with("skill") 保留
+            分支要求 not attacking）
+    修复：二技能释放不设 attacking（打断免疫已由 BODY_SKILL 体
+          系统承担），让 apply_physics 保留 skill1 动画。
+    教训：技能动画要保留必须满足
+          `image_state.begins_with("skill") and not attacking`；
+          设 attacking 会被覆盖成 attack 动画。
+
+[9] 二技能动画残留
+    现象：玄鸟衔月闪播完后剑豪仍显示技能最后一帧。
+    根因：image_state 卡在 "skill1"（begins_with("skill") 分支
+          保留），没人切回待机。
+    修复：技能结束时 f.set_animation_state("idle")。
+
+[10] 千峰破云显示"被清空"
+    现象：释放一技能/大招后屏幕下方图标消失。
+    排查结论：combo_seq 数据从未被清空；是千枫落华斩/孤鸿踏雪的
+          全屏 overlay 在渲染时覆盖了屏幕下方图标（渲染顺序：
+          全屏 overlay 晚于屏幕空间 draw_effect）。
+    修复：draw_effect 增加 top_layer 参数，全屏动画之后单独绘制
+          顶层元素；千峰破云图标以 top_layer=true 注册。
+
+--------------------------------------------------------
+三、时停 / 手感反馈类
+--------------------------------------------------------
+
+[11] 释放二技能永久卡住（时停死锁）
+    现象：二技能抓取成功触发时停后，游戏永久停住。
+    根因：_time_stop_caster 设了 state_flags["time_stop"] 标记 +
+          queue_after_time_stop(清除标记)。但 check_time_stop_end
+          触发条件是 `time_stop_timer <= 0 and not is_time_stopped()`，
+          而 is_time_stopped() 会因该标记恒为 true → 清除队列永不
+          触发 → 标记永不清除 → 无限时停。
+    修复：_time_stop_caster 去掉标记，只调 GameWorld.trigger_time_stop
+          （瞬间时停本就是短暂全冻结，动画暂停 0.2s 可接受，计时
+          归零自动恢复）。
+    教训：不要把"施放者标记"交给 check_time_stop_end 清除——
+          标记自身会让 is_time_stopped() 恒真，形成死锁。
+          后续动作（普攻1时停后震动）用 queue_after_time_stop 即可，
+          无标记时能正常触发。
+
+[12] 时停时长设定（当前值，供调整手感参考）
+    普攻1/普攻2摧毁飞行物：ATK1_TS_FRAMES = 36 帧（0.6s）瞬间时停，
+          时停结束后 queue_after_time_stop 触发屏幕震动。
+    二技能抓取成功：SKILL1_TS_FRAMES = 45 帧（0.75s）瞬间时停。
+    一技能（千枫落华斩）：无时停，仅释放期间持续轻震
+          trigger_shake(1.5, 3)。
+    大招（孤鸿踏雪）：hit_stop = 20 帧（全冻结，与 time_stop 不同）。
+    调整记录：普攻 12 帧、二技能 15 帧 → 用户要求 3 倍 → 36/45 帧。
+
+--------------------------------------------------------
+四、测试脚本（自己写测试时踩的坑）
+--------------------------------------------------------
+
+[T1] GameWorld.player/enemy 未赋值
+    现象：get_opponent() 返回 null，技能判定失败。
+    根因：测试脚本用了局部变量 player/enemy，忘记赋给
+          GameWorld.player / GameWorld.enemy。
+    修复：显式 GameWorld.player = player; GameWorld.enemy = enemy。
+
+[T2] 局部具名函数不支持
+    GDScript 函数体内不能写 `func xxx():`，要写成
+    `var xxx := func():` 且调用用 `xxx.call()`。
+
+[T3] for 循环变量作用域
+    `for i in range(n):` 的 i 在循环外不可用（GDScript 4 块作用域），
+    需要外部变量记录。
+
+[T4] 方法归属
+    check_time_stop_end() / queue_after_time_stop() 是 GameWorld 的
+    方法，不是 CharacterSystems 的。
+
+[T5] CharConfigs 未初始化
+    测试场景必须先在开头调 CharConfigs.ensure_init()，
+    否则 owner.config.animations 为空（角色 config 没加载）。
+
+[T6] 类型推断
+    `var x := comp.xxx` 当 comp 是动态类型时无法推断，
+    需显式标注类型（如 `var x: float = ...`）。
+
+[T7] headless 运行要点
+    - 必须加 --log-file 指向项目内可写路径（沙箱阻止写 user:// 日志）
+    - 测试进程退出时会崩溃（-1073741819），属沙箱/引擎退出问题，
+      输出正常即可；跑完记得清理 Godot_v4.7-stable_win64_console
+      残留进程和 godot_test.log。
+
+--------------------------------------------------------
+五、其他通用教训
+--------------------------------------------------------
+
+[G1] config animations 是共享对象
+    CharacterFactory 缓存的 config 被所有同角色 fighter 共享，
+    直接对 config.animations 的动画对象 play()/覆盖会互相干扰。
+    大招/千枫落华斩这类全屏演出用独立新建对象。
+
+[G2] 全屏 overlay 是 100% 不透明整屏动画（1890×1080）
+    会完全盖住本体和屏幕下方元素；本体用 skip_fighter_draw 隐藏，
+    常驻 HUD 用 top_layer。
+
+[G3] hit_stop 与 time_stop 区别
+    hit_stop：整个 _update 提前 return（全冻结，包括动画）。
+    time_stop：只推进 overlay + 施放者（_advance_time_stop_casters）。
+    大招用 hit_stop=20 制造短暂停顿；普攻1/二技能抓取用
+    trigger_time_stop 制造"瞬间时停"。
+    时缓力度可配：GameWorld.trigger_slow_motion(duration, factor)，
+    factor = 每 N 个逻辑 tick 才跑一帧 _update（默认 3 = 3 倍慢速；
+    骑士招架用 12 制造极慢镜头）。时缓结束后自动复位默认力度。
+
+[G4] frozen 状态 = 完整不可操作
+    add_status("frozen") 同时锁移动（is_movement_locked）、
+    锁 AI（AISystem 检查）、锁输入（InputHandler 检查）。
+    二技能抓取期间用它对敌人实现"不可操作"，记得在抓取结束/
+    斩击/被打断时用 statuses.filter 移除，防止残留。
+
+--------------------------------------------------------
+六、UI 规范（图鉴）
+--------------------------------------------------------
+
+[UI1] 图鉴只有竖向滚动条，没有横向滚动条
+    角色图鉴 / 天赋图鉴内所有 ScrollContainer（列表、详情、
+    天赋列表）一律禁用横向滚动：
+        scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    涉及节点：DexListScroll / TalentDexScroll / DexDetailScroll /
+    DexBodyScroll（动态创建）/ 天赋图鉴 left_scroll（动态创建）。
+    新加滚动容器时必须遵守，否则长内容会把面板撑出横向滚动条。
+
+--------------------------------------------------------
+七、屏幕震动等级规范（trigger_shake）
+--------------------------------------------------------
+接口：GameWorld.trigger_shake(intensity, duration)
+  intensity = 震动强度（像素位移）
+  duration  = 持续帧数（60 帧 = 1 秒）
+注：duration 取最大值累加（后触发的震动只延长、不覆盖已有震动），
+    intensity 直接覆盖。
+
+等级划分（当前所有角色的实际取值，供后续手感调整参考）：
+
+【微弱】（intensity 1.5 ~ 6，适合普攻/持续轻震）
+  1.5 / 3   剑豪：一技能释放期间持续轻震（kensai.gd）
+  4.0 / 6   狂战士：断筋斩持续切割（每 15 帧一次，berserker.gd）
+  5.0 / 6   刺客：普攻胧月·斩（assassin.gd ATK_SHAKE）
+  6.0 / 10  影武者：一技能抓取结束瞬间（shadowwarrior.gd）
+
+【中等】（intensity 7 ~ 10，适合技能释放/招架反馈）
+  7.0 / 12  剑豪：二技能抓取时缓开始（微微震动，kensai.gd）
+  8.0 / 12  骑士：一技能蓄力>1s 释放（knight.gd SKILL1_RELEASE_SHAKE）
+  8.0 / 12  骑士：二技能招架成功（knight_component.gd PARRY_SHAKE）
+  10.0 / 12 刺客：二技能释放（assassin.gd SKILL2_SHAKE，偏轻）
+  10.0 / 12 唤魔者：召唤物重击释放 / 大招释放（evoker.gd）
+
+【强】（intensity 14 ~ 22，适合大招/重击命中瞬间）
+  14.0 / 16 剑豪：普攻1 时停结束震动（kensai.gd）
+  16.0 / 18 剑豪：一技能拔剑斩击段（kensai.gd）
+  22.0 / 18 狂战士：断筋斩命中（berserker.gd TENDON_HIT_SHAKE）
+
+默认参数：trigger_shake 未传参时 = 20.0 / 20（game_world.gd）。
+
+调整规律（历史）：
+  刺客/影武者等手感改动中，用户多次要求"减小震动幅度"，
+  幅度从 20+ 逐步收敛到当前值；新加震动建议先用本表对应等级，
+  再按实际手感微调 intensity（幅度优先）与 duration（时长）。
+========================================

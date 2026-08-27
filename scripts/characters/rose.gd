@@ -3,12 +3,7 @@ class_name RoseCharacter
 
 const RoseComponent = preload("res://scripts/components/rose_component.gd")
 
-const ROSE_SLASH_IMG = preload("res://assets/fx_rose_slash.png")
 const ROSE_SKILL1_IMG = preload("res://assets/fx_rose_skill1.png")
-const ROSE_ENH_SLASH1 = preload("res://assets/fx_rose_enh_slash1.png")
-const ROSE_ENH_SLASH2 = preload("res://assets/fx_rose_enh_slash2.png")
-const ROSE_ENH_SLASH3 = preload("res://assets/fx_rose_enh_slash3.png")
-const ROSE_ENH_SLASH4 = preload("res://assets/fx_rose_enh_slash4.png")
 const ROSE_ANI_DIR = "res://assets/char_ani/rose/"
 const ROSE_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/rose_idle_foot_gaps.gd")
 const ROSE_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/rose_jump_foot_gaps.gd")
@@ -17,13 +12,7 @@ const ROSE_SKILL1_PLUS_BLADEEFFECT_FOOT_GAPS = preload("res://data/foot_gaps/ros
 const ROSE_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_foot_gaps.gd")
 const ROSE_SKILL2_PLUS_FOOT_GAPS = preload("res://data/foot_gaps/rose_skill2_plus_foot_gaps.gd")
 const ROSE_ULT_FOOT_GAPS = preload("res://data/foot_gaps/rose_ult_foot_gaps.gd")
-
-## 从预加载贴图创建单帧 FrameAnimation（用于角色变身等替换人物贴图的场景）
-static func _single_frame_anim(tex: Texture2D, dur: float, loop: bool = false) -> FrameAnimation:
-	var a = FrameAnimation.new()
-	a.add_frame(tex, dur)
-	a.loop = loop
-	return a
+const ROSE_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/rose_attack_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
@@ -31,20 +20,21 @@ static func get_config() -> Dictionary:
 		"speed": 2.25, "attack_range": 44, "attack_damage": 5,
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
 		"image_scale": 1.2,
+		"skill_anim_states": ["skill2"],  # 技能动画：播放期间锁输入，受击可提前结束（skill1 动画2s远超冲刺时长、skill2_enhanced 需方向操控，均不锁）
 		"fields": {},
 		"world_arrays": [],
 		"animations": {
 			"idle": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _rose_idle_anchors()),
 			"walk": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "walk/sheet.png", 4, 3, 10, 0.1, true, _rose_walk_anchors()),
 			"jump": FrameAnimation.load_jump_sheet(ROSE_ANI_DIR + "jump/sheet.png", 2, 2, 4, 0.2, _rose_jump_anchors()),
-			"attack": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "attack/", "rose_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"skill1": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill1/", "rose_skill1_f_", [{"index": 1, "duration": 2.0}], false),
+			"attack": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _rose_attack_anchors()),
+			"skill1": _rose_skill1_anim(),
 			"skill1_plus_bladeeffect": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet.png", 4, 3, 11, 0.1, false, _rose_skill1_plus_bladeeffect_anchors()),
 			"skill2": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.08, false, _rose_skill2_anchors()),
 			"skill2_enhanced": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill2_enhanced/", "rose_skill2_enhanced_f_", [{"index": 1, "duration": 3.0}], false),
 			"skill2_plus": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2_plus/sheet.png", 4, 3, 11, 0.1, false, _rose_skill2_plus_anchors()),
 			"ult": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors()),
-			"charge": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "charge/", "rose_charge_f_", [{"index": 1, "duration": 999.0}], true),
+			"charge": _rose_charge_anim(),
 		},
 		"dex": {
 			"icon": "🌹",
@@ -150,6 +140,19 @@ static func _rose_ult_anchors() -> Array:
 		})
 	return anchors
 
+## attack 动画锚点：同 _rose_idle_anchors 写法（10 帧，格 1080x1080）
+static func _rose_attack_anchors() -> Array:
+	var anchors: Array = []
+	for i in range(ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_FOOT[i],
+			"head_gap": ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_HEAD[i],
+			"center_dx": ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_CENTER[i],
+			"content_w": ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_CONTENT_W[i],
+			"content_h": ROSE_ATTACK_FOOT_GAPS.ROSE_ATTACK_CONTENT_H[i],
+		})
+	return anchors
+
 static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	var comp: RoseComponent = p.components.get_component("rose") if p.components else null
 	# 强化一技能播片期间锁定所有操作
@@ -174,7 +177,8 @@ static func handle_input(p: Fighter, keys: Dictionary) -> int:
 	if keys.right: mx = 1
 	if keys.up and p.grounded: p.vy = -10; p.grounded = false
 	if keys.attack and p.attack_cooldown <= 0 and not p.attacking:
-		p.attacking = true; p.attack_timer = 30; p.attack_delay = 8
+		# 出伤时机：普攻动画第 3 帧（斩击弧最宽处）→ 0.05s/帧 × 2 = 0.1s 起手 + 判定延迟对齐，attack_delay=9 ≈ 0.15s
+		p.attacking = true; p.attack_timer = 30; p.attack_delay = 9
 		p.attack_hit_dealt = false; p.attack_cooldown = 60; p.state = "attack"
 		keys.attack = false
 	if keys.skill1 and not p.dashing:
@@ -200,21 +204,31 @@ static func update_systems(f: Fighter):
 	var comp: RoseComponent = f.components.get_component("rose") if f.components else null
 	if not comp: return
 	
-	# Ult: overlay damage
+	# Ult: 六段斩击按动画帧出伤（亮像素峰值帧 22/29/39/46/47/48，0-based 索引 21/28/38/45/46/47）
+	# 大招为全屏 overlay 时停，GameWorld.frame 冻结，不能按全局帧 tick；用动画当前帧索引驱动
 	var has_ult_overlay = false
+	var ult_anim: FrameAnimation = null
 	for entry in GameWorld.active_overlays:
 		if entry.get("overlay_id") == "rose_ult":
 			has_ult_overlay = true
+			ult_anim = entry.get("anim")
 			break
-	if has_ult_overlay and GameWorld.frame % 16 == 0:
-		#FIXED BUG: 大招原伤偏高,调整为40总伤害(每16帧3.0,约13跳≈39)
+	if has_ult_overlay and ult_anim and comp.ult_hits.size() == 6:
 		var target = GameWorld.get_opponent(f)
 		if target and target.hp > 0:
-			Fighter.apply_damage(target, 3.0, f, false, Color(0.9, 0.15, 0.15))
-			Fighter.emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 12, Color(0.9, 0.15, 0.15), 5, 7, "star", 0.8)
+			var slash_idx := [21, 28, 38, 45, 46, 47]
+			var slash_dmg := [5.0, 5.0, 6.0, 7.0, 8.0, 8.0]  # 总 39，终结连斩更重
+			var cur_idx: int = ult_anim.get_current_index()
+			for s in range(6):
+				if not comp.ult_hits[s] and cur_idx >= slash_idx[s]:
+					comp.ult_hits[s] = true
+					Fighter.apply_ult_damage_zone(f, slash_dmg[s], Color(0.9, 0.15, 0.15))
+					Fighter.emit_particles(target.pos_x + target.w / 2.0, target.pos_y + target.h / 2.0, 12, Color(0.9, 0.15, 0.15), 5, 7, "star", 0.8)
 	# Skill2: bat swarm
 	if comp.rose_skill2_active:
-		f.image_state = "skill2"
+		# 强化飞行需方向操控：image_state 保持 skill2_enhanced（不在 skill_anim_states，
+		# 否则全局输入锁会禁用摇杆移动，导致强化二技能不能自由移动）
+		f.image_state = "skill2_enhanced" if comp.rose_skill2_enhanced else "skill2"
 		if comp.rose_skill2_enhanced:
 			f.vx = 0; f.vy = 0
 			var jd = GameWorld.rose_joystick_dir
@@ -268,9 +282,38 @@ static func update_systems(f: Fighter):
 			f.dashing = false
 			f.state = "idle"
 			f.vx = 0
-	# 非强化冲刺结束后清除 image_state
-	if not f.dashing and f.image_state == "skill1" and comp.rose_skill1_enhanced_slashes.size() == 0:
+	# 非强化冲刺结束后：常态一技能生成 sheet1 刀光动画拖尾（16 帧），并清除 image_state。
+	# 拖尾第1帧（索引0）与最后1帧（索引15）各出伤一次（总伤不变），最后1帧击退；
+	# 第14帧（索引13）抓取效果结束，第15帧（索引14）屏幕中震。
+	if not f.dashing and f.image_state == "skill1" and comp.rose_skill1_enhanced_slashes.size() == 0 \
+			and not comp.rose_skill1_enhanced_used:
+		if not comp.rose_skill1_trail_spawned:
+			comp.rose_skill1_trail_spawned = true
+			var n_anim = _rose_skill1_blade_anim()
+			n_anim.play()
+			GameWorld.rose_slash_trails.append({
+				"anim": n_anim,
+				"x": comp.rose_skill1_grab_pos_x - 90.0,  # 常态刀光宽 180，居中于抓取点
+				"y": f.pos_y - 4,
+				"w": 180.0,
+				"h": f.h + 8,
+				"dir": f.facing,
+				"hit_dealt": false,
+				"timer": 100,  # 覆盖完整动画时长（16帧 × 0.1s ≈ 96 帧）
+				"damage": 10.0,
+				"owner": f,
+				"normal_blade": true,
+			})
 		f.image_state = ""
+	# 强化播片超时保护（复用原四连斩生成计时器）：超过 2s 强制结束，防止任何路径卡死
+	if comp.rose_skill1_enhanced_slashes.size() > 0:
+		comp.rose_skill1_slash_spawn_timer += 1
+		if comp.rose_skill1_slash_spawn_timer >= 120:
+			comp.rose_skill1_enhanced_slashes = []
+			comp.rose_skill1_trail_spawned = false
+			comp.rose_skill1_slash_spawn_timer = 0
+	else:
+		comp.rose_skill1_slash_spawn_timer = 0
 	# Skill1 enhanced: 播片阶段持续抓取 + 向后判定 + 刀光生成
 	if comp.rose_skill1_enhanced_slashes.size() > 0 or _has_active_enhanced_trails(f):
 		var enemy = GameWorld.get_opponent(f)
@@ -292,44 +335,79 @@ static func update_systems(f: Fighter):
 		# Rose 播片期锁定
 		f.vx = 0
 		f.vy = 0
-		# 四连斩快速生成（0.25s/道）
-		comp.rose_skill1_slash_spawn_timer += 1
-		if comp.rose_skill1_slash_spawn_timer >= 15:
-			comp.rose_skill1_slash_spawn_timer = 0
-			var slash_data: Dictionary = comp.rose_skill1_enhanced_slashes.pop_front()
-			var slash_img: Texture2D = slash_data.get("img")
-			if slash_img:
-				var slash_anim = _single_frame_anim(slash_img, 15.0 / 60.0)
-				slash_anim.play()
-				var slash_w = 220.0
-				var slash_cx = comp.rose_skill1_grab_pos_x
-				GameWorld.rose_slash_trails.append({
-					"anim": slash_anim,
-					"x": slash_cx - slash_w / 2.0,
-					"y": f.pos_y - 4,
-					"w": slash_w,
-					"h": f.h + 8,
-					"dir": f.facing,
-					"hit_dealt": false,
-					"timer": 15,
-					"damage": 7.0,
-					"owner": f,
-				})
+		# 强化四连斩：一次性生成 sheet.png 刀光动画拖尾（11 帧），
+		# 第1/4/6/9帧（索引0/3/5/8）出伤 + 屏幕微震由 update_rose_trails 处理
+		if not f.dashing and not comp.rose_skill1_trail_spawned:
+			comp.rose_skill1_trail_spawned = true
+			var e_anim = _rose_enh_blade_anim()
+			e_anim.play()
+			var slash_w = 220.0
+			var slash_cx = comp.rose_skill1_grab_pos_x
+			GameWorld.rose_slash_trails.append({
+				"anim": e_anim,
+				"x": slash_cx - slash_w / 2.0,
+				"y": f.pos_y - 4,
+				"w": slash_w,
+				"h": f.h + 8,
+				"dir": f.facing,
+				"hit_dealt": false,
+				"timer": 66,  # 11帧 × 0.1s ≈ 66 游戏帧
+				"damage": 4.0,
+				"frame_hits": [0, 3, 5, 8],  # 第1/4/6/9帧（索引），各 4 点 = 总 16
+				"owner": f,
+				"enhanced_blade": true,
+			})
 	# 常态抓取持续锁定：冲刺期间敌人被定身
 	if comp.rose_skill1_holding and comp.rose_skill1_enhanced_slashes.size() == 0 and not _has_active_enhanced_trails(f) and f.dashing:
 		var enemy = GameWorld.get_opponent(f)
 		if enemy and enemy.hp > 0:
 			Fighter.hold_fighter_in_place(enemy, comp.rose_skill1_grab_pos_x)
 	# 释放抓取：常态冲刺结束后释放 | 强化刀光全部结束后释放
-	if comp.rose_skill1_holding and comp.rose_skill1_enhanced_slashes.size() == 0 and not _has_active_enhanced_trails(f) and not f.dashing:
+	# （常态刀光拖尾播放期间，抓取由 update_rose_trails 持续锁定至刀光第14帧）
+	if comp.rose_skill1_holding and comp.rose_skill1_enhanced_slashes.size() == 0 and not _has_active_enhanced_trails(f) and not f.dashing and not _has_normal_blade(f):
 		comp.rose_skill1_holding = false
 
-## 判断是否还有未消失的强化刀光拖尾
+## 判断是否还有未消失的强化刀光拖尾（sheet.png 四连斩）
 static func _has_active_enhanced_trails(f: Fighter) -> bool:
 	for trail in GameWorld.rose_slash_trails:
-		if trail.get("owner") == f and trail.has("anim"):
+		if trail.get("owner") == f and trail.has("anim") and trail.get("enhanced_blade", false):
 			return true
 	return false
+
+## 判断是否还有未消失的常态刀光拖尾（sheet1.png 动画）
+static func _has_normal_blade(f: Fighter) -> bool:
+	for trail in GameWorld.rose_slash_trails:
+		if trail.get("owner") == f and trail.get("normal_blade", false):
+			return true
+	return false
+
+## 常态一技能刀光动画（sheet1.png，4x4=16 帧，替代原 fx_rose_slash.png 静态贴图）
+static func _rose_skill1_blade_anim() -> FrameAnimation:
+	return FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet1.png", 4, 4, 16, 0.1, false)
+
+## 强化一技能四连斩刀光动画（sheet.png，4x3=11 帧，替代原 fx_rose_enh_slash1~4.png）
+static func _rose_enh_blade_anim() -> FrameAnimation:
+	return FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet.png", 4, 3, 11, 0.1, false)
+
+## 冲刺待机贴图（charge）：单帧静态，按内容锚点渲染放大至碰撞盒大小（内容高 → f.h）
+static func _rose_charge_anim() -> FrameAnimation:
+	return _rose_static_anim(ROSE_ANI_DIR + "charge/rose_charge_f_1.png", 999.0, true)
+
+## 技能一冲刺姿态（skill1）：与 charge 同一张贴图，同样按内容锚点放大至碰撞盒大小
+static func _rose_skill1_anim() -> FrameAnimation:
+	return _rose_static_anim(ROSE_ANI_DIR + "skill1/rose_skill1_f_1.png", 2.0, false)
+
+## 单帧静态动画：按 PIL 实测锚点渲染，内容高映射为 f.h（放大至碰撞盒大小）
+static func _rose_static_anim(img_path: String, dur: float, p_loop: bool) -> FrameAnimation:
+	var a := FrameAnimation.new()
+	var tex: Texture2D = load(img_path)
+	if tex:
+		# 锚点（PIL 实测 2048 图）：内容 1808×1833，foot_gap=32，head_gap=183，center_dx=-58.5
+		a.add_frame(tex, dur, 32, 183, -58.5, 1808, 1833)
+		a.loop = p_loop
+		a._calc_total_duration()
+		a._calc_content_h_ref()
+	return a
 
 ## 刀光拖尾更新 + 绘制回调注册（rose 专属，从 character_systems 移出）
 static func update_rose_trails():
@@ -338,11 +416,64 @@ static func update_rose_trails():
 		trail["timer"] -= 1
 		var anim: FrameAnimation = trail.get("anim")
 		if anim: anim.update(1.0)
+		var slash_owner = trail.get("owner")
+		# 常态一技能刀光（sheet1）：
+		# 第14帧（索引13）抓取效果结束；第15帧（索引14）屏幕中震；
+		# 第1帧（索引0）与最后1帧（索引15）各出伤一次（总伤不变），最后1帧附加击退
+		if trail.get("normal_blade", false) and slash_owner and anim:
+			var n_comp: RoseComponent = slash_owner.components.get_component("rose") if slash_owner.components else null
+			var n_bi: int = anim.get_current_index()
+			if n_comp and n_bi >= 0:
+				var n_enemy = GameWorld.get_opponent(slash_owner)
+				# 第14帧前持续锁定敌人（抓取效果），之后释放
+				if n_comp.rose_skill1_holding and n_bi < 13:
+					if n_enemy and n_enemy.hp > 0:
+						Fighter.hold_fighter_in_place(n_enemy, n_comp.rose_skill1_grab_pos_x)
+				else:
+					n_comp.rose_skill1_holding = false
+				# 帧跳变检测（每帧只触发一次帧事件）
+				if n_bi != n_comp.rose_skill1_prev_blade_idx:
+					n_comp.rose_skill1_prev_blade_idx = n_bi
+					# 第15帧（索引14）屏幕中震
+					if n_bi == 14:
+						GameWorld.trigger_shake(10.0, 12)
+					# 第1帧 / 最后1帧 各出伤一次（5+5=10，总伤不变）
+					if (n_bi == 0 or n_bi == 15) and n_enemy and n_enemy.hp > 0:
+						var n_hitbox = Rect2(trail["x"], trail["y"], trail["w"], trail["h"])
+						if n_hitbox.intersects(n_enemy.get_hit_box()):
+							Fighter.apply_damage(n_enemy, trail.get("damage", 10.0) * 0.5, slash_owner)
+							trail["hit_dealt"] = true
+							# 最后1帧：击退
+							if n_bi == 15:
+								n_enemy.vx = trail.get("dir", 1) * 6.0
+								n_enemy.vy = -3.0
+		# 强化四连斩刀光（sheet.png）：第1/4/6/9帧（索引0/3/5/8）出伤 + 屏幕微震
+		elif trail.get("enhanced_blade", false) and slash_owner and anim:
+			var e_bi: int = anim.get_current_index()
+			var e_hits: Array = trail.get("frame_hits", [0, 3, 5, 8])
+			var e_flags: Dictionary = trail.get("hit_flags", {})
+			if e_bi >= 0 and e_hits.has(e_bi) and not e_flags.has(e_bi):
+				e_flags[e_bi] = true
+				trail["hit_flags"] = e_flags
+				var e_target = GameWorld.get_opponent(slash_owner)
+				if e_target and e_target.hp > 0:
+					var e_hitbox = Rect2(trail["x"], trail["y"], trail["w"], trail["h"])
+					if e_hitbox.intersects(e_target.get_hit_box()):
+						Fighter.apply_damage(e_target, trail.get("damage", 4.0), slash_owner)
+				GameWorld.trigger_shake(5.0, 6)  # 屏幕微震
 		if trail["timer"] <= 0:
+			# 强化四连斩拖尾结束：同步结束播片（基于计时器而非动画 is_finished，
+			# 保证输入锁定/播片状态必然复位，避免释放强化一技能后动不了）
+			if trail.get("enhanced_blade", false) and slash_owner:
+				var e_comp: RoseComponent = slash_owner.components.get_component("rose") if slash_owner.components else null
+				if e_comp:
+					e_comp.rose_skill1_enhanced_slashes = []
+					e_comp.rose_skill1_trail_spawned = false
+					e_comp.rose_skill1_prev_blade_idx = -1
 			to_remove.append(trail)
 			continue
-		var slash_owner = trail.get("owner")
-		if not trail["hit_dealt"] and slash_owner:
+		# 通用单次命中（无帧事件的普通拖尾）
+		if not trail.get("enhanced_blade", false) and not trail.get("normal_blade", false) and not trail["hit_dealt"] and slash_owner:
 			var target = GameWorld.get_opponent(slash_owner)
 			if target and target.hp > 0:
 				var hitbox = Rect2(trail["x"], trail["y"], trail["w"], trail["h"])
@@ -416,8 +547,6 @@ static func _skill1(owner: Fighter) -> Dictionary:
 		owner.energy -= 15
 	
 	var dir = owner.facing
-	var slash_w = 220 if enhanced else 180
-	var slash_damage = 15 if enhanced else 10
 	
 	# Start dash with grab (prevent default dash damage, handle in character_systems)
 	owner.dashing = true
@@ -431,35 +560,14 @@ static func _skill1(owner: Fighter) -> Dictionary:
 		comp.rose_skill1_grab_done = false  # 重置向前判定
 		comp.rose_skill1_holding = false    # 重置持续抓取
 		comp.rose_skill1_grab_pos_x = owner.pos_x + dir * 60.0  # 冲刺轨迹中点
-	
-	# 冲刺轨迹中点（normal 刀光位置基准）
-	var slash_center = comp.rose_skill1_grab_pos_x if comp else (owner.pos_x + dir * 60.0)
+		comp.rose_skill1_trail_spawned = false  # 刀光拖尾在冲刺结束后生成
+		comp.rose_skill1_enhanced_used = enhanced  # 记录本次是否为强化（防止强化播片后误生成常态刀光）
 	
 	if enhanced and comp:
-		# Schedule 4 sequential slashes (spawned in character_systems after dash)
+		# 强化四连斩：sheet.png 动画拖尾（播片期一次性生成），第1/4/6/9帧出伤 + 微震
 		if skill: skill.cd = 900  # 15 second cooldown
-		comp.rose_skill1_enhanced_slashes = [
-			{"img": ROSE_ENH_SLASH1, "timer": 80},
-			{"img": ROSE_ENH_SLASH2, "timer": 80},
-			{"img": ROSE_ENH_SLASH3, "timer": 80},
-			{"img": ROSE_ENH_SLASH4, "timer": 80},
-		]
-		comp.rose_skill1_slash_spawn_timer = 0
-	else:
-		# Normal: create single slash trail at dash trajectory center
-		var slash = {
-			"x": slash_center - slash_w / 2.0,
-			"y": owner.pos_y - 4,
-			"w": slash_w,
-			"h": owner.h + 8,
-			"dir": dir,
-			"hit_dealt": false,
-			"timer": 60,  # 1 second
-			"damage": slash_damage,
-			"owner": owner,  # Track who created this slash
-			"img": ROSE_SLASH_IMG
-		}
-		GameWorld.rose_slash_trails.append(slash)
+		comp.rose_skill1_enhanced_slashes = [1, 2, 3, 4]  # 播片期占位标记（驱动播片/锁定/体系统）
+	# 常态一技能的刀光拖尾在冲刺结束后由 update_systems 生成（保证第1帧出伤命中已抓取的敌人）
 	
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 30, Color(1.0, 0.1, 0.1), 5, 7, "star")
 	return {"success": true}
@@ -535,6 +643,35 @@ static func _ult(owner: Fighter) -> Dictionary:
 	if comp:
 		comp.time_stop = true
 		comp.time_stop_timer = int(anim.total_duration * 60)
+		comp.ult_hits = [false, false, false, false, false, false]  # 重置六段斩击命中标记
 	
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 80, Color(0.9, 0.15, 0.15), 12, 16, "star", 2.0)
 	return {"success": true}
+
+## 体系统：蔷薇状态分类（技能打断优先级）
+static func body_priority(f: Fighter) -> int:
+	var comp: RoseComponent = f.components.get_component("rose") if f.components else null
+	if comp and (comp.time_stop or f.state == "ult"):
+		return Fighter.BODY_VAJRA  # 暗夜华尔兹
+	if comp:
+		if f.image_state == "skill1":
+			# 强化分支（四连斩）期间 = 普攻体；释放瞬间 = 技能体
+			return Fighter.BODY_NORMAL if not comp.rose_skill1_enhanced_slashes.is_empty() else Fighter.BODY_SKILL
+		if f.image_state == "skill2" and not comp.rose_skill2_enhanced:
+			return Fighter.BODY_SKILL  # 夜翼瞬袭（常态）
+	return -1
+
+## 被中断时：结束一技能冲刺/抓取与二技能状态
+static func on_interrupted(f: Fighter):
+	var comp: RoseComponent = f.components.get_component("rose") if f.components else null
+	if comp:
+		comp.rose_skill1_holding = false
+		comp.rose_skill1_grab_pos_x = 0.0
+		comp.rose_skill1_enhanced_slashes = []
+		comp.rose_skill1_trail_spawned = false
+		comp.rose_skill1_enhanced_used = false
+		comp.rose_skill1_prev_blade_idx = -1
+		comp.rose_skill2_active = false
+		comp.rose_skill2_enhanced = false
+		f.dash_remaining = 0
+		f.dashing = false

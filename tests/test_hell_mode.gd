@@ -12,7 +12,7 @@ func test_ai_presets_contains_hell():
 
 func test_hell_preset_values():
 	var hell = Constants.AI_PRESETS["hell"]
-	assert_eq(hell["react"], 60, "hell 反应延迟应为 60ms")
+	assert_eq(hell["react"], 42, "hell 反应延迟应为 42（基础 think_delay 降 30%）")
 	assert_eq(hell["aggro"], 0.95, "hell 攻击性应为 0.95")
 	assert_eq(hell["dodge"], 0.6, "hell 闪避率应为 0.6")
 	assert_eq(hell["skill_rate"], 0.9, "hell 技能使用率应为 0.9")

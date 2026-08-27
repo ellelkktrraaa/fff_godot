@@ -22,6 +22,7 @@ var stage_window: int = 0       # 等待下一段的窗口帧（>0 → HUD 黄�
 var stage_window_max: int = 0
 var can_next_func: Callable = Callable()  # 可选：下一段可用性检查（如狂暴状态才派生二段）
 var manual_window: bool = false  # true：一段释放不自动开窗口，由外部 open_next_stage() 开启（跨技能触发）
+var buff_timer: int = 0          # 强化/增益状态剩余帧（>0 → HUD 技能槽黄条显示剩余时间，如黑法师强化状态）
 
 func _init(p_key: String = "", p_name: String = "", p_cooldown: int = 0, p_energy_cost: int = 0, 
 		   p_can_use: Callable = Callable(), p_execute: Callable = Callable()):
@@ -55,10 +56,14 @@ func end_stage_flow():
 	stage_index = -1
 	stage_window = 0
 
+## 实际能量消耗（乘能量消耗倍率，如黑法师黑暗能量 0.5 → 消耗减半）
+func effective_cost(owner: Fighter) -> int:
+	return int(ceil(energy_cost * owner.energy_cost_multiplier))
+
 func can_use(owner: Fighter) -> bool:
 	if cd > 0:
 		return false
-	if owner.energy < energy_cost:
+	if owner.energy < effective_cost(owner):
 		return false
 	if owner.charging_attack:
 		return false
@@ -83,7 +88,7 @@ func try_use(owner: Fighter) -> Dictionary:
 	# 正常释放：一段（或流程结束后重新进入）
 	if not can_use(owner):
 		return {"success": false}
-	owner.energy -= energy_cost
+	owner.energy -= effective_cost(owner)
 	cd = cooldown
 	if stages.size() > 0:
 		stage_index = 0
@@ -113,6 +118,8 @@ func _next_window(owner: Fighter) -> int:
 func update():
 	if cd > 0:
 		cd -= 1
+	if buff_timer > 0:
+		buff_timer -= 1
 	# 多段窗口计时：极限时间未释放下一段 → 结束流程，黄标消失
 	if stage_window > 0:
 		stage_window -= 1

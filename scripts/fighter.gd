@@ -48,6 +48,7 @@ var max_hp: float = 100
 var energy: float = 0
 var max_energy: float = 100
 var energy_regen: float = 0.05
+var energy_cost_multiplier: float = 1.0  # 能量消耗倍率（黑法师黑暗能量 = 0.5，1 黑暗能量 = 2 能量）
 
 # Combat
 var attacking: bool = false
@@ -163,6 +164,11 @@ var dk_ult_fire_tick: int = 0
 var dk_ult_fire_total: float = 0.0
 var dk_ult_claw_dealt: bool = false
 var dk_ult_target_locked: bool = false
+var dk_air_atk_prev_air: bool = false    # 龙骑士空中普攻：上一帧是否在空中攻击（落地瞬间检测）
+var dk_shield_block_fx: bool = false     # 鳞反本次举盾是否已触发格挡成功演出（每次举盾一次）
+var dk_shield_shake_pending: bool = false  # 格挡成功：时缓结束后待触发的震动标记
+var dk_skill1_hit_dealt: bool = false    # 龙骑士一技能：动画第6帧是否已出伤（每次释放一次）
+var dk_ult1_shake_pending: bool = false  # 大招一段：时缓结束后待触发的震动标记
 
 # ── 天赋系统 ──
 var ad: Dictionary = {}                    # 天赋命名空间 { talent_id: {...} }
@@ -188,6 +194,9 @@ func detach_injections():
 	GameWorld.unregister_draw_effect(fid + "_trail")
 	GameWorld.unregister_draw_effect(fid + "_sw")
 	GameWorld.unregister_draw_effect(fid + "_phantoms")
+	GameWorld.unregister_draw_effect(fid + "_bm_ice_crystals")
+	GameWorld.unregister_draw_effect(fid + "_bm_fireballs")
+	GameWorld.unregister_draw_effect(fid + "_bm_thunder_aura")
 	# 重置注入字段
 	dash_step_callbacks.clear()
 	dash_damage_override = 0.0
@@ -310,12 +319,14 @@ func _set_attr_val(attr: String, val: float):
 		"defense": defense = val
 
 func set_animation_state(state_key: String):
+	var prev_state = image_state
 	image_state = state_key
 	var anims = config.get("animations", {})
 	var new_anim = anims.get(state_key)
 	if new_anim:
 		current_anim = new_anim
-		if not current_anim.is_playing():
+		# 状态真正切换时从头播放；同状态每帧重复调用不重置（保持循环动画连续）
+		if state_key != prev_state or not current_anim.is_playing():
 			current_anim.play()
 
 ## 跳跃动画状态机：起跳（前 N-1 帧共 0.2s）→ 滞空（最后一帧保持）→ 落地倒放起跳帧。
@@ -324,6 +335,10 @@ func _update_jump_animation() -> bool:
 	var anims: Dictionary = config.get("animations", {})
 	var jump_anim = anims.get("jump")
 	if not (jump_anim is FrameAnimation and jump_anim.jump_sheet):
+		return false
+	# 飞行动画锁：角色脚本在特殊浮空状态（如龙骑士凌空）设置该黑板位，
+	# 期间跳跃动画状态机不接管，空中动画完全由角色 update_systems 管理
+	if state_flags.get("no_jump_anim", false):
 		return false
 	if jump_phase == 0 and grounded:
 		return false
@@ -370,6 +385,11 @@ func add_status(effect_id: String):
 	# 龙骑士免疫灼烧
 	if char_id == "dragon_knight" and effect_id == "burn":
 		return
+	# 灼烧立刻解除冰冻（火克冰）：命中灼烧目标立即脱离冰冻
+	if effect_id == "burn":
+		for s in statuses:
+			if s.id == "frozen":
+				s.timer = 0  # 下一帧 update_statuses 自然移除（含 ice_hit_count 复位）
 	# Prevent duplicate freeze application
 	var def = _StatusEffectClass.STATUS_DEFS.get(effect_id, {})
 	if def.get("freeze", false) and has_status("frozen"):
@@ -392,10 +412,12 @@ func update_statuses():
 	statuses = statuses.filter(func(s): return s.update(self))
 
 func get_slowed_factor() -> float:
+	# 多个减速状态可叠加（乘法）：如黑法师冰棱减速 10%×层数
+	var factor := 1.0
 	for s in statuses:
 		if s.slow_factor < 1.0:
-			return s.slow_factor
-	return 1.0
+			factor *= s.slow_factor
+	return factor
 
 func is_movement_locked() -> bool:
 	return has_status("frozen") or has_status("stun") or shield_active or dashing or state_flags.get("tendon_locked", false)
@@ -603,8 +625,7 @@ func apply_physics():
 	# Dragon Knight: 凌空/举盾/大招 重力跳过 (计时由 update_systems 管理)
 	if dk_sky_rise_active or dk_crash_timer > 0 or dk_shield_active or dk_ult_active:
 		pass
-	for s in skills:
-		s.update()
+	# 技能冷却统一由 game.gd 固定 60Hz 逻辑帧更新，此处不重复调用（避免冷却 2 倍速）
 	var regen = config.get("energy_regen", 0.083)
 	if energy < max_energy:
 		energy += regen
@@ -621,19 +642,23 @@ func apply_physics():
 		pass  # 龙魂大招期间动画由 update_systems 管理
 	elif not grounded and attacking and image_state == "attack_air":
 		pass  # 空中下砸动画由角色 update_systems 管理
-	elif image_state.begins_with("skill") and not attacking:
-		pass  # Keep skill-specific animation state (set by character logic)
+	elif image_state.begins_with("skill"):
+		pass  # 技能动画由角色 update_systems 保持（attacking 与否均不覆盖；否则施法中会被 645/659 覆盖成普攻/待机动画）
 	elif image_state.begins_with("mounted_"):
 		pass  # 骑乘状态动画由角色 handle_input 管理
 	elif dashing or charging_skill1 or charging:
 		set_animation_state("charge")
-	elif attacking:
+	elif attacking and not image_state.begins_with("skill"):
 		set_animation_state("attack")
 	elif state == "ult":
 		set_animation_state("ult")
+	elif state == "stance" or state == "windup":
+		pass  # 剑豪乘岚斩霞蓄力架势 / 普攻起手：动画由角色 handle_input 管理，physics 不覆盖
 	elif _update_jump_animation():
 		pass  # 跳跃动画状态机（起跳→滞空→落地倒放）接管
-	elif not grounded:  # 旧式跳跃（未用 load_jump_sheet 的角色保持原单帧行为）
+	elif not grounded and state_flags.get("no_jump_anim", false):
+		pass  # 飞行动画锁：空中动画由角色 update_systems 管理，不覆盖（如龙骑士凌空 in_air）
+	elif not grounded:
 		set_animation_state("jump")
 	elif state == "walk":
 		set_animation_state("walk")
@@ -641,7 +666,59 @@ func apply_physics():
 		set_animation_state("idle")
 
 # ===== Static damage function =====
-static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockback: bool = true, hit_color: Color = Color(1.0, 0.53, 0.27), sound_name: String = "hit_enemy", damage_source: String = "", recursion_depth: int = 0):
+
+# ── 体系统：技能打断优先级 ──
+# 金刚体(3) > 霸体(2) > 技能体(1) > 普攻体(0)
+const BODY_NORMAL := 0  # 普攻体：普攻/待机/移动/跳跃/普攻蓄力/强化形态
+const BODY_SKILL := 1   # 技能体：释放技能状态
+const BODY_ARMOR := 2   # 霸体：霸体天赋 / 带霸体描述的技能 / 变身霸体
+const BODY_VAJRA := 3   # 金刚体：释放大招 / 天赋或特殊技能
+
+## 目标当前体等级。先查角色专属覆盖（cls.body_priority），未实现时走通用规则。
+## 打断规则：攻击体 >= 目标体 → 打断；攻击体 < 目标体 → 不打断且不击退/击飞（仍造成伤害）。
+static func get_body_priority(f: Fighter) -> int:
+	if not f:
+		return BODY_NORMAL
+	var prio = CharacterFactory.call_body_priority(f)
+	if prio >= 0:
+		return prio
+	# 通用兜底
+	if f.state_flags.get("super_armor", false):
+		return BODY_ARMOR
+	if f.state == "ult":
+		return BODY_VAJRA
+	if f.charging_skill1 or f.charging:
+		return BODY_SKILL
+	if f.attacking and f.image_state.begins_with("skill"):
+		return BODY_SKILL
+	return BODY_NORMAL
+
+## 防御/招架类技能是否激活（免疫打断，伤害照常结算；招架触发由各角色自行处理）
+static func is_defense_parry_active(f: Fighter) -> bool:
+	if not f:
+		return false
+	if f.blocking:
+		return true
+	if f.shield_active:
+		return true
+	return CharacterFactory.call_is_defense_parry(f)
+
+## 打断目标当前技能施放：恢复普通动画 + 清除通用施法状态 + 角色专属清理
+static func interrupt_skill_cast(target: Fighter):
+	if not target:
+		return
+	target.interrupt_skill_anim_on_hit()
+	target.attacking = false
+	target.attack_timer = 0
+	target.attack_delay = 0
+	target.charging = false
+	target.charging_skill1 = false
+	target.charging_attack = false
+	if target.image_state.begins_with("skill") or target.image_state in target.config.get("skill_anim_states", []):
+		target.set_animation_state("idle")
+	CharacterFactory.call_on_interrupted(target)
+
+static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockback: bool = true, hit_color: Color = Color(1.0, 0.53, 0.27), sound_name: String = "hit_enemy", damage_source: String = "", recursion_depth: int = 0, hit_priority: int = -1):
 	if not target or target.hp <= 0:
 		return
 	if attacker == target:
@@ -735,6 +812,9 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 
 	var final_dmg: float = base_dmg
 
+	# 角色钩子：受伤前处理（格挡/消耗资源/减伤等，返回修正后伤害；如黑法师凛冬冰棱格挡只受 30%）
+	final_dmg = _call_on_pre_damage(target, attacker, final_dmg)
+
 	# 圣佑：免疫击退（减伤由防御力承担，激活时 defense+50）
 	if paladin_comp and paladin_comp.holy_empower_active:
 		knockback = false
@@ -756,6 +836,28 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 	if target.state_flags.get("super_armor", false):
 		knockback = false
 
+	# 冰棱格挡：凛冬状态下被命中消耗冰棱 → 免疫击退/击飞（伤害已在 on_pre_damage 减至 30%）
+	if target.state_flags.get("bm_ice_block", false):
+		knockback = false
+
+	# ── 体系统：技能打断优先级 ──
+	# 攻击体缺省取攻击者当前体；低优先级攻击命中高优先级体 → 不打断且不击退/击飞（仍造成伤害）
+	var hit_p: int = hit_priority
+	if hit_p < 0:
+		hit_p = get_body_priority(attacker) if attacker else BODY_NORMAL
+	var target_p: int = get_body_priority(target)
+	var is_grab: bool = damage_source == "grab"
+	var defense_active: bool = is_defense_parry_active(target)
+	if not is_grab and hit_p < target_p:
+		knockback = false
+	# 打断判定：防御/招架类免疫打断；抓取打断除金刚体外一切；否则攻击体 >= 目标体才打断
+	var should_interrupt: bool = false
+	if not defense_active:
+		if is_grab:
+			should_interrupt = target_p < BODY_VAJRA
+		elif hit_p >= target_p:
+			should_interrupt = true
+
 	# 暴击伤害倍率
 	if is_critical:
 		final_dmg = final_dmg * 1.5
@@ -769,14 +871,30 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 	target.hp -= final_dmg
 	target.damage_flash = 10
 	target.hit_cooldown = 15
-	# Blood Abyss: attacker gains blood_abyss equal to damage dealt
+	target.hp_changed.emit(old_hp, target.hp)
+	# 练习模式：累计玩家对敌人造成的实际伤害（伤害显示开关）
+	if GameWorld.practice_mode and attacker and attacker == GameWorld.player \
+			and target == GameWorld.enemy and final_dmg > 0:
+		GameWorld.practice_damage_dealt += final_dmg
+		GameWorld.practice_damage_last_frame = GameWorld.frame
+	# 体系统打断：满足条件时目标立刻停止释放技能
+	if should_interrupt:
+		interrupt_skill_cast(target)
 	if attacker:
 		var attacker_rose = attacker.components.get_component("rose") if attacker.components else null
 		if attacker_rose:
-			if not attacker_rose.rose_blood_abyss_suppressed:
+			# 建议：强化技能（强化一技能播片 / 强化二技能飞行）命中不恢复血渊——
+			# 血渊作为强化消耗资源，不因命中返还（常态普攻/技能/大招仍恢复）
+			var rose_enhancing: bool = attacker_rose.rose_skill1_enhanced_slashes.size() > 0 \
+				or attacker_rose.rose_skill2_enhanced
+			if not attacker_rose.rose_blood_abyss_suppressed and not rose_enhancing:
 				attacker_rose.blood_abyss = minf(40.0, attacker_rose.blood_abyss + final_dmg)
 			if attacker_rose.rose_blood_abyss_suppressed:
 				attacker_rose.rose_blood_abyss_suppressed = false
+		# 剑豪被动：造成伤害立即恢复等量能量（1 伤害 = 1 能量），上限 100
+		var attacker_kensai = attacker.components.get_component("kensai") if attacker.components else null
+		if attacker_kensai:
+			attacker.energy = minf(100.0, attacker.energy + final_dmg)
 	if knockback and attacker and attacker != target:
 		target.vy = -4
 		target.vx = (attacker.facing if attacker.facing != 0 else (1 if target.is_player else -1)) * 5
@@ -799,6 +917,12 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 static func _call_on_damage_received(target: Fighter, attacker: Fighter, dmg: float):
 	if target.components:
 		target.components.on_damage_received(attacker, dmg)
+
+# Call character-specific pre-damage hooks via components (格挡/减免等，返回修正后伤害)
+static func _call_on_pre_damage(target: Fighter, attacker: Fighter, dmg: float) -> float:
+	if target.components:
+		return target.components.on_pre_damage(attacker, dmg)
+	return dmg
 
 static func emit_particles(px: float, py: float, count: int, color: Color, speed: float, size: float, type: String = "circle", spread: float = 1.0):
 	for i in count:
@@ -854,6 +978,15 @@ static func set_super_armor(f: Fighter, frames: int = 0):
 static func clear_super_armor(f: Fighter):
 	f.state_flags.erase("super_armor")
 	f.state_flags.erase("super_armor_timer")
+
+## 受击提前结束技能动画（全局规则：技能动画只能通过受击提前结束）。
+## 仅作用于 config.skill_anim_states 声明的状态；霸体/无敌期间由调用方保证不触发。
+func interrupt_skill_anim_on_hit():
+	var anim = current_anim
+	if anim == null or not anim.is_playing():
+		return
+	if image_state in config.get("skill_anim_states", []):
+		set_animation_state("idle")
 
 ## 抓取对手到指定 x 坐标（以目标中心对齐），返回是否成功
 static func grab_fighter(target: Fighter, teleport_x: float) -> bool:
@@ -937,6 +1070,28 @@ func _teleport_to_random_ground():
 	dashing = false
 	grounded = true
 	emit_particles(pos_x + w / 2.0, pos_y, 20, Color(0.667, 0.267, 1.0), 3, 8, "circle")
+
+## 全屏大招伤害判定（统一标准）：以释放者几何中心为圆心、size×size 矩形框内所有敌人命中。
+## 所有全屏演出大招共用，跨角色范围统一（默认 600×600，即释放者 ±300px）。
+## hit_priority 用于体系统（如千枫落华斩传 Fighter.BODY_SKILL）。
+## center 可覆盖判定中心（如演出期释放者可能移动时，传释放瞬间位置快照）
+static func apply_ult_damage_zone(attacker: Fighter, dmg: float, hit_color: Color = Color(1.0, 0.53, 0.27), size: float = 600.0, hit_priority: int = -1, center: Vector2 = Vector2.INF) -> void:
+	var cx: float
+	var cy: float
+	if center != Vector2.INF:
+		cx = center.x
+		cy = center.y
+	else:
+		cx = attacker.pos_x + attacker.w / 2.0
+		cy = attacker.pos_y + attacker.h / 2.0
+	var half: float = size / 2.0
+	for e in GameWorld.entities:
+		if e == attacker or e.hp <= 0 or e.is_player == attacker.is_player:
+			continue
+		var ex: float = e.pos_x + e.w / 2.0
+		var ey: float = e.pos_y + e.h / 2.0
+		if absf(ex - cx) <= half and absf(ey - cy) <= half:
+			apply_damage(e, dmg, attacker, false, hit_color, "hit_enemy", "ult", 0, hit_priority)
 
 # ===== Movement helpers (used by character input strategies) =====
 static func apply_movement(f: Fighter, mx: int, max_spd: float):

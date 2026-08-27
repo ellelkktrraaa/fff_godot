@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bvdyl6rcq3yci"
+path="res://.godot/imported/Echo Of The Ruin.mp3-4edb1d4f443d9492bb9b3723b37039ee.mp3str"
+
+[deps]
+
+source_file="res://assets/audio/bgm_battle/Echo Of The Ruin.mp3"
+dest_files=["res://.godot/imported/Echo Of The Ruin.mp3-4edb1d4f443d9492bb9b3723b37039ee.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

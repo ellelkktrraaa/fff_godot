@@ -7,6 +7,8 @@ var parry_timer: int = 0
 var parry_hit: bool = false
 var parry_cd_on_end: bool = false  # 招架结束（成功或失败）时进入冷却
 var rending_used: bool = false     # 裂空冷却惩罚（仅单次）
+var parry_ranged_hit: bool = false  # 本次招架是否已反弹过飞行物（防止重复触发时缓/震动）
+var parry_shake_pending: bool = false  # 招架成功后待时缓结束再触发的震动标记
 
 # 招架成功增益计时
 var atk_boost_timer: int = 0           # 骑士伤害提升 10% 持续5s
@@ -31,6 +33,10 @@ var _debuff_original_dmg: float = 0.0
 const PARRY_DURATION := 90   # 1.5s
 const STUN_DURATION := 120   # 2s
 const DEBUFF_DURATION := 300 # 5s
+const PARRY_SLOW_MO := 90    # 招架成功时缓帧数（逻辑慢速，90 帧 ≈ 1.5s 实机时间）
+const PARRY_SLOW_MO_FACTOR := 12  # 招架时缓力度：每 12 tick 才跑一帧逻辑（默认 3 倍 → 12 倍极慢镜头）
+const PARRY_SHAKE := 8.0     # 招架成功屏幕震动强度（中等偏轻）
+const PARRY_SHAKE_DUR := 12  # 招架成功屏幕震动持续帧数
 
 func on_damage_received(attacker: Fighter, _dmg: float):
 	if not parry_active:
@@ -66,7 +72,9 @@ func on_damage_received(attacker: Fighter, _dmg: float):
 		Fighter.emit_particles(vfx_cx, vfx_cy, 8, Color(0.5, 0.8, 1.0, 0.4), 12, 16, "circle", 2.5)
 
 		# ── 时缓特效（参考刺客完美闪避）──
-		GameWorld.trigger_slow_motion(90)
+		# 顺序：招架成功 → 时缓 → 时缓结束后再由 update_systems 触发中等震动（不与时缓同时）
+		GameWorld.trigger_slow_motion(PARRY_SLOW_MO, PARRY_SLOW_MO_FACTOR)
+		parry_shake_pending = true
 
 		# 伤害降低 20% 持续 5s（同目标只刷新计时，不重复叠乘）
 		if debuff_target != attacker:

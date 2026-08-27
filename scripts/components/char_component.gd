@@ -11,6 +11,10 @@ func update():
 func on_damage_received(attacker: Fighter, dmg: float):
 	pass
 
+## 受伤前钩子：在伤害结算前调用，可消耗资源/减伤/格挡，返回修正后伤害（原样返回 = 不干预）
+func on_pre_damage(attacker: Fighter, dmg: float) -> float:
+	return dmg
+
 func on_attack_hit(target: Fighter, dmg: float):
 	pass
 

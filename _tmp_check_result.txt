@@ -1,0 +1,20 @@
+START
+foot_gaps loaded: 15 frames
+idle: frames=15 total_dur=1.5 loop=true ref_h=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-47.0 cw=464 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-51.0 cw=472 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-53.0 cw=476 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-52.0 cw=470 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-44.0 cw=454 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-42.0 cw=450 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-50.0 cw=466 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-53.0 cw=472 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-48.0 cw=462 ch=694
+   tex=768x768 dur=0.1 foot=23 head=51 center=-41.0 cw=448 ch=694
+   tex=768x768 dur=0.1 foot=23 head=52 center=-47.0 cw=460 ch=693
+   tex=768x768 dur=0.1 foot=23 head=52 center=-51.0 cw=468 ch=693
+   tex=768x768 dur=0.1 foot=23 head=52 center=-54.0 cw=474 ch=693
+   tex=768x768 dur=0.1 foot=23 head=52 center=-40.0 cw=446 ch=693
+   tex=768x768 dur=0.1 foot=23 head=52 center=-43.0 cw=456 ch=693
+jump_sheet: frames=15 jump_sheet=true
+DONE

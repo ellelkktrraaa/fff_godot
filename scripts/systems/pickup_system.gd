@@ -29,13 +29,70 @@ static func update_pickups_and_end():
 		e["alpha"] = float(e["life"]) / float(e["max_life"])
 		if e["life"] <= 0:
 			GameWorld.explosion_effects.remove_at(i2)
-	# Game over check
-	if GameWorld.player.hp <= 0:
+	# Game over check —— 击杀瞬间触发 3 秒时缓（胜利/失败演出），时缓结束后再结算
+	# 练习模式：死亡不触发游戏结束，改为短延迟复活
+	if GameWorld.practice_mode:
+		_practice_respawn_update()
+	elif GameWorld.death_slowmo_result.is_empty():
+		if GameWorld.player.hp <= 0 or GameWorld.enemy.hp <= 0:
+			GameWorld.death_slowmo_result = "lose" if GameWorld.player.hp <= 0 else "win"
+			GameWorld.trigger_slow_motion(GameWorld.DEATH_SLOWMO_DURATION)
+	elif GameWorld.slow_mo_timer <= 0:
+		# 时缓结束 → 结算胜负
 		GameWorld.game_over = true
-		GameWorld.game_result = "lose"
-	elif GameWorld.enemy.hp <= 0:
-		GameWorld.game_over = true
-		GameWorld.game_result = "win"
+		GameWorld.game_result = GameWorld.death_slowmo_result
+
+# ── 练习模式：死亡复活（60 帧 = 1 秒）──
+const PRACTICE_RESPAWN_FRAMES := 60
+
+static func _practice_respawn_update():
+	if GameWorld.player.hp <= 0 and GameWorld.practice_respawn_player <= 0:
+		GameWorld.practice_respawn_player = PRACTICE_RESPAWN_FRAMES
+	if GameWorld.enemy.hp <= 0 and GameWorld.practice_respawn_enemy <= 0:
+		GameWorld.practice_respawn_enemy = PRACTICE_RESPAWN_FRAMES
+	if GameWorld.practice_respawn_player > 0:
+		GameWorld.practice_respawn_player -= 1
+		if GameWorld.practice_respawn_player <= 0:
+			_practice_revive(GameWorld.player)
+	if GameWorld.practice_respawn_enemy > 0:
+		GameWorld.practice_respawn_enemy -= 1
+		if GameWorld.practice_respawn_enemy <= 0:
+			_practice_revive(GameWorld.enemy)
+
+## 练习模式复活：清除该角色遗留的投射物/分身/召唤物，满血回出生点
+static func _practice_revive(f):
+	if not f or f.hp > 0:
+		return
+	for i in range(GameWorld.projectiles.size() - 1, -1, -1):
+		if GameWorld.projectiles[i].get("owner") == f:
+			GameWorld.projectiles.remove_at(i)
+	for i in range(GameWorld.phantoms.size() - 1, -1, -1):
+		if GameWorld.phantoms[i].get("owner") == f:
+			GameWorld.phantoms.remove_at(i)
+	for i in range(GameWorld.evoker_summons.size() - 1, -1, -1):
+		if GameWorld.evoker_summons[i].get("owner") == f:
+			GameWorld.evoker_summons.remove_at(i)
+	f.hp = f.max_hp
+	f.pos_x = f.spawn_x
+	f.pos_y = f.spawn_y
+	f.vx = 0
+	f.vy = 0
+	f.grounded = true
+	f.attacking = false
+	f.attack_timer = 0
+	f.attack_delay = 0
+	f.attack_hit_dealt = false
+	f.dashing = false
+	f.dash_remaining = 0
+	f.blocking = false
+	f.shield_active = false
+	f.shield_timer = 0
+	f.statuses.clear()
+	f.is_invincible = false
+	f.invincible_timer = 0
+	f.state = "idle"
+	f.set_animation_state("idle")
+	f.energy = 0.0
 
 static func _pickup_interval() -> int:
 	# hard=720 帧（12 秒），hell=900 帧（15 秒），其余=420 帧（7 秒）

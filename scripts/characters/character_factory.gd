@@ -14,6 +14,8 @@ const Bard = preload("res://scripts/characters/bard.gd")
 const Astrologer = preload("res://scripts/characters/astrologer.gd")
 const NecroKnight = preload("res://scripts/characters/necro_knight.gd")
 const Berserker = preload("res://scripts/characters/berserker.gd")
+const Kensai = preload("res://scripts/characters/kensai.gd")
+const BlackMage = preload("res://scripts/characters/black_mage.gd")
 
 # Component preloads
 const COMP_ARCHER = preload("res://scripts/components/archer_component.gd")
@@ -30,6 +32,8 @@ const COMP_BARD = preload("res://scripts/components/bard_component.gd")
 const COMP_ASTROLOGER = preload("res://scripts/components/char_component.gd")  # fallback
 const COMP_NECRO_KNIGHT = preload("res://scripts/components/necro_knight_component.gd")
 const COMP_BERSERKER = preload("res://scripts/components/berserker_component.gd")
+const COMP_KENSAI = preload("res://scripts/components/kensai_component.gd")
+const COMP_BLACK_MAGE = preload("res://scripts/components/black_mage_component.gd")
 
 static var _char_registry := {
 	"knight": { "cls": Knight, "config": null, "comp": COMP_KNIGHT },
@@ -46,6 +50,8 @@ static var _char_registry := {
 	"astrologer": { "cls": Astrologer, "config": null, "comp": COMP_ASTROLOGER },
 	"necro_knight": { "cls": NecroKnight, "config": null, "comp": COMP_NECRO_KNIGHT },
 	"berserker": { "cls": Berserker, "config": null, "comp": COMP_BERSERKER },
+	"kensai": { "cls": Kensai, "config": null, "comp": COMP_KENSAI },
+	"black_mage": { "cls": BlackMage, "config": null, "comp": COMP_BLACK_MAGE },
 }
 
 static func get_config(char_id: String) -> Dictionary:
@@ -92,6 +98,29 @@ static func call_rose_trails():
 	if cls and cls.has_method("update_rose_trails"):
 		cls.update_rose_trails()
 
+## 角色专属体等级覆盖（技能打断优先级；未实现返回 -1 走通用规则）
+static func call_body_priority(f: Fighter) -> int:
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("body_priority"):
+		return cls.body_priority(f)
+	return -1
+
+## 角色专属防御/招架激活判定（免疫打断；默认 false）
+static func call_is_defense_parry(f: Fighter) -> bool:
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("is_defense_parry"):
+		return cls.is_defense_parry(f)
+	return false
+
+## 角色被中断时的专属清理（取消持续施法 flag）
+static func call_on_interrupted(f: Fighter):
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("on_interrupted"):
+		cls.on_interrupted(f)
+
 ## 创建角色组件（替代 ComponentManager 中的 match char_id）
 static func create_component(char_id: String, owner: Fighter) -> CharComponent:
 	var entry = _char_registry.get(char_id, {})
@@ -113,6 +142,18 @@ static func call_global_update(char_id: String):
 static func get_all_char_ids() -> Array:
 	return _char_registry.keys()
 
+## 隐藏形态角色：不出现独立条目（如黑法师是法师的共生形态，靠法师卡双击切换），
+## 也不参与随机敌人选择。游戏内仍可通过 selected_char_id 直接使用。
+static var _hidden_char_ids := ["black_mage"]
+
+## 返回可选角色 ID（排除隐藏形态）
+static func get_visible_char_ids() -> Array:
+	var ids: Array = []
+	for cid in _char_registry.keys():
+		if cid not in _hidden_char_ids:
+			ids.append(cid)
+	return ids
+
 ## 调度地狱模式 AI 战术（角色脚本实现，替代 AISystem 中的 match char_id）
 ## 返回已处理的状态（"ATTACK"/"DODGE"/"DEFEND"），空字符串表示未处理走默认 AI
 static func call_ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
@@ -120,6 +161,20 @@ static func call_ai_hell_tactics(f: Fighter, ctx: Dictionary) -> String:
 	var cls = entry.get("cls")
 	if cls and cls.has_method("ai_hell_tactics"):
 		return cls.ai_hell_tactics(f, ctx)
+	return ""
+
+## 角色是否实现常规 AI 战术（有则 AISystem 的通用随机技能释放不再对该角色生效）
+static func has_ai_tactics(char_id: String) -> bool:
+	var entry = _char_registry.get(char_id, {})
+	var cls = entry.get("cls")
+	return cls != null and cls.has_method("ai_tactics")
+
+## 调度角色常规 AI 战术（所有难度生效；返回状态字符串，空 = 未处理走默认 AI）
+static func call_ai_tactics(f: Fighter, ctx: Dictionary) -> String:
+	var entry = _char_registry.get(f.char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("ai_tactics"):
+		return cls.ai_tactics(f, ctx)
 	return ""
 
 ## 调度地狱模式专属走位参数（返回空字典表示不覆盖默认走位）
@@ -136,6 +191,15 @@ static func play_intro(char_id: String):
 	var cls = entry.get("cls")
 	if cls and cls.has_method("play_intro"):
 		cls.play_intro()
+
+## 角色自定义登场动画（替代通用开场）
+## 返回 {"frames": Array[Texture2D], "durs": Array[int]（每帧游戏帧数）}；空字典 = 用通用开场
+static func get_intro(char_id: String) -> Dictionary:
+	var entry = _char_registry.get(char_id, {})
+	var cls = entry.get("cls")
+	if cls and cls.has_method("get_intro"):
+		return cls.get_intro()
+	return {}
 
 ## 重新注入全局绘制（reset_world 清除后调用，仅无参版本）
 static func reinject_draws():
