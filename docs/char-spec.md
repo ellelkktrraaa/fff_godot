@@ -1,4 +1,7 @@
-# 焰刃流光 — 角色开发规范 v1.0
+# 焰刃流光 — 角色开发规范 v1.1
+
+> v1.1 新增：第十一章「Boss 战组件开发规范」，约束外部开发者以纯数据 + 复用现有
+> PVE 管线的方式扩展 Boss，禁止为单一 Boss 耦合引擎系统代码。
 
 ## 〇、核心原则
 
@@ -367,3 +370,114 @@ if owner.attacking and owner.char_id != "archer":
 var strategy = CharRegistry.get_input_strategy(p.char_id)
 strategy.update(p, keys)
 ```
+
+---
+
+## 十一、Boss 战组件开发规范（防耦合约束）
+
+> **核心原则：Boss = 纯数据 + 复用现有 PVE 管线。**
+> Boss 不是一个新的游戏模式，而是 PVE 战斗的一次"参数化实例"：敌人是谁、
+> 打哪张地图、数值多强，全部由一份 Boss 配置决定。**新增一个 Boss 不得修改任何
+> 引擎/系统脚本**；如需新表现（外观/招式），请先按本规范第一~十章新增或扩展角色。
+
+### 11.1 引擎侧固定接口（只读，禁止为单个 Boss 修改）
+
+以下模块属引擎系统层，新增 Boss 时**视为只读**；改动它们需要主仓库评审，禁止
+在内部以 `boss_id` / `char_id` 特判的方式塞入单一 Boss 逻辑：
+
+| 文件 | 责任 | 已提供的 Boss 接入点 |
+|---|---|---|
+| `scripts/game.gd` | 对局流程 | 读 `GameWorld.boss_id` → 经 `BossSystem` 决定敌人/地图/数值 |
+| `scripts/fighter.gd` | 战斗属性 | `apply_boss_modifiers(mods)` 覆盖属性；`apply_damage` 全局倍率插桩 |
+| `scripts/game_world.gd` | 对局状态 | `boss_id` / `is_boss_mode()`（`game_mode` 仍为 `"pve"`） |
+| `scripts/systems/ai_system.gd` | AI 状态机 | 读取 `enemy.ai_overrides` 增量覆盖 AI 预设；距离判定等禁止按 Boss 特判 |
+| `scripts/systems/render_system.gd` / `hud_system.gd` | 表现 | 敌血条名读取 `enemy.boss_name` |
+| `scripts/systems/pickup_system.gd` | 结算 | 胜利自动触发 `ProgressSystem.on_boss_defeated` |
+| `scripts/systems/boss_system.gd` | Boss 薄适配层 | 提供 `is_active / get_active / resolve_enemy_char / resolve_map_path / apply_to_enemy` |
+| `data/boss_configs.gd` | Boss 注册表 | 扫描 `data/bosses/` + `_builtin_boss_files` 兜底；只在此登记新 Boss |
+
+> 场景 `game.tscn`、角色体系（`CharacterFactory` 全部角色）、地图库（`MapManager`）
+> 同样复用，不因 Boss 改动。
+
+### 11.2 新增一个 Boss 的最小步骤
+
+1. 新建 `res://data/bosses/boss_<id>.gd`，提供 `static func get_boss() -> Dictionary`；
+2. 在 `data/boss_configs.gd` 的 `_builtin_boss_files` 中追加一行（打包后扫描兜底）；
+3. 自检（见 11.7）：`char_id` 必须在 `CharacterFactory` 已注册；`map` 必须是真实存在的地图。
+
+> 配置文件之间相互独立：Boss 定义文件**不得 import 任何其它模块**（参照
+> `boss_configs.gd` 的注释约定），一切依赖经注册表延迟解析，防止配置间形成耦合。
+
+### 11.3 Boss 配置 Schema
+
+```gdscript
+# data/bosses/boss_<id>.gd
+# Boss 外部配置文件 —— 仅声明数据，不写任何逻辑；不得依赖其它模块。
+static func get_boss() -> Dictionary:
+    return {
+        "id": "boss_id",                 # 全局唯一 id（文件与注册键一致）
+        "name": "Boss 显示名",            # HUD 敌血条名称
+        "char_id": "paladin",            # 复用角色：动画/技能/组件/专属 AI 战术全继承
+        "map": "res://maps/map_01_battlefield.tscn",  # 固定地图（不得为空）
+        "levels": [
+            { "difficulty": "easy",   "modifiers": { ... } },
+            { "difficulty": "medium", "modifiers": { ... } },
+            { "difficulty": "hard",   "modifiers": { ... } },
+            { "difficulty": "hell",   "modifiers": { ... } },
+        ],
+    }
+```
+
+`difficulty` 取值必须来自 `Constants.DIFFICULTY_LEVELS`
+（`["easy", "medium", "hard", "hell"]`）；当前难度未命中某档时自动回退第一档。
+
+### 11.4 Modifiers 语义与白名单
+
+`modifiers` 字典是 Boss 唯一的"个性化"入口，只允许以下键（白名单，越界键会被忽略）：
+
+| 分类 | 键 | 说明 |
+|---|---|---|
+| 基础属性覆盖 | `hp` `defense` `attack_damage` `attack_range` `attack_speed` `max_energy` `energy_regen` | 覆盖角色 config 同名初始值 |
+| 全局倍率 | `damage_multiplier` | Boss 造成伤害 ×n（统一收口于 `apply_damage`，无需逐技能改） |
+| 全局倍率 | `damage_taken_multiplier` | Boss 受到的伤害 ×n |
+| AI 增量 | `ai: { react, aggro, dodge, skill_rate, move_speed, jump_rate }` | 对所选难度 `Constants.AI_PRESETS` 做增量覆盖 |
+| 表现（可选） | `boss_name` | 敌血条名（缺省取配置 `name`） |
+
+**硬性规则：**
+
+1. **不得**通过 modifiers 表达逻辑分支（如"某技能命中后才生效"），modifiers 只做数值微调；
+2. **不得**改写共享角色 config（`data/char_configs.gd` 的缓存由 `CharConfigs.reset()`
+   统一还原）；覆盖统一走 `Fighter.apply_boss_modifiers(mods)`；
+3. **不得**改变难度字符串语义：AI 的难度 = 玩家所选难度，`ai` 只做数值增量；
+4. **不得**在系统/伤害代码中为 Boss 特判（如 `if attacker.boss_name == "xxx"`）；
+5. 难度数值应单调递增，`hell` 明显强于 `easy`（测试会校验不递减）。
+
+### 11.5 Boss 专属扩展的正确姿势
+
+| 需求 | 正确做法 |
+|---|---|
+| Boss 需要新技能/新动作/新 AI 战术 | 按第一~十章流程新增一个"角色"，Boss 引用其 `char_id` |
+| 需要专属新地图 | 新建 `maps/map_boss_*.tscn`，并登记到 `MapManager._locked_map_keywords`（避免进入 PVE 随机池）；Boss 配置的 `map` 指向它 |
+| 需要阶段切换/转场演出等框架级能力 | 属引擎能力扩展，**先与主仓库统一设计**后再在框架层实现，禁止在单一 Boss 里临时绕路 |
+| Boss 列表 / 难度解锁 UI | 一律经 `BossConfigs` / `BossSystem` / `ProgressSystem` 读取，UI 层禁止硬编码 |
+
+### 11.6 难度解锁与进度
+
+- 每 Boss 独立记录"已解锁最高难度档"；默认 `easy` 解锁，其余锁定；
+- 玩家在某难度下击败该 Boss 后，由结算系统自动调用
+  `ProgressSystem.on_boss_defeated(boss_id, difficulty)` 推进解锁（幂等）；
+- **Boss 逻辑 / 关卡代码禁止手动写解锁存档**；读取解锁状态一律使用
+  `ProgressSystem.is_boss_difficulty_unlocked(boss_id, difficulty)`；
+- 持久化由 `ProgressSystem` 统一管理（`user://boss_progress.cfg`），新增进度类型
+  需按"独立 hook + 独立 section"扩展，禁止把新状态塞进既有存档节。
+
+### 11.7 验收检查清单（新增 Boss 后应满足）
+
+- [ ] 未修改第 11.1 节任何"只读"引擎文件（若修改请说明并走评审）；
+- [ ] `boss_<id>.gd` 字段齐全：`id/name/char_id/map/levels`，四档难度完整；
+- [ ] `char_id` 已注册、`map` 真实存在、`id` 无冲突；
+- [ ] `modifiers` 只使用 11.4 白名单键，数值随难度单调递增；
+- [ ] 不依赖该 Boss 特有逻辑在系统代码中新增 `if` 分支；
+- [ ] 未触碰共享角色 config、难度字符串语义、解锁存档；
+- [ ] `tests/test_boss_configs.gd`、`tests/test_boss_modifiers.gd`、
+      `tests/test_boss_progress.gd` 全绿。
