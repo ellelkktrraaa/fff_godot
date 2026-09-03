@@ -122,7 +122,7 @@ static func _dragon_knight_skill1_anchors() -> Array[Dictionary]:
 
 ## 技能一动画：加载 sheet 后舍弃前两帧（蓄力帧），保留原第 3~17 帧共 15 帧（锚点随帧携带）
 static func _dragon_knight_skill1_anim() -> FrameAnimation:
-	var anim = FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill1/sheet.png", 5, 4, 17, 0.1, false, _dragon_knight_skill1_anchors())
+	var anim = FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill1/sheet.png", 5, 4, 17, 0.1, false, _dragon_knight_skill1_anchors(), Vector2i(2, 1))
 	if anim.frames.size() > 2:
 		anim.frames = anim.frames.slice(2, anim.frames.size())
 		anim._calc_total_duration()
@@ -186,11 +186,11 @@ static func get_config() -> Dictionary:
 			"attack_air": _make_anim(DK_SKY_SPLIT, 0.5, false, DK_SKY_SPLIT_ANCHOR),
 			"skill1": _dragon_knight_skill1_anim(),
 			"skill1_phase2": _make_anim(DK_DIVE_STRIKE, 0.5, false, DK_DIVE_STRIKE_ANCHOR),
-			"skill2": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill2/sheet.png", 5, 5, 24, 0.02, false, _dragon_knight_skill2_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "skill2/sheet.png", 5, 5, 24, 0.02, false, _dragon_knight_skill2_anchors(), Vector2i(2, 1)),
 			"in_air": FrameAnimation.load_from_sprite_sheet(DK_ANI_DIR + "in_air/sheet.png", 3, 3, 9, 0.1, true, _dragon_knight_in_air_anchors()),
-			"ult": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors()),
-			"ult_flight": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors()),
-			"ult_attack": FrameAnimation.load_from_sprite_sheet(DK_ATTACK_SHEET, 4, 3, 12, 0.05, false, _dragon_knight_attack_sheet_anchors()),
+			"ult": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors(), Vector2i(2, 1)),
+			"ult_flight": FrameAnimation.load_from_sprite_sheet(DK_DRAGON_SHEET, 4, 4, 14, 0.1, true, _dragon_knight_dragon_anchors(), Vector2i(2, 1)),
+			"ult_attack": FrameAnimation.load_from_sprite_sheet(DK_ATTACK_SHEET, 4, 3, 12, 0.05, false, _dragon_knight_attack_sheet_anchors(), Vector2i(2, 1)),
 		},
 		"dex": {
 			"icon": "🐉",

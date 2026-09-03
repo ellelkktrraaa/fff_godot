@@ -31,7 +31,7 @@ static func get_config() -> Dictionary:
 			"idle": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "idle/sheet.png", 5, 5, 21, 0.1, true, _archer_idle_anchors()),
 			"walk": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "charge/sheet.png", 5, 4, 17, 0.1, true, _archer_walk_anchors()),
 			"jump": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "jump/sheet.png", 4, 4, 16, 0.1, true, _archer_jump_anchors()),
-			"skill_attack": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "attack/sheet.png", 5, 5, 22, 0.1, false, _archer_attack_anchors()),
+			"skill_attack": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "attack/sheet.png", 5, 5, 22, 0.1, false, _archer_attack_anchors(), Vector2i(2, 1)),
 			"skill_ult": FrameAnimation.load_from_sprite_sheet(ARCHER_ANI_DIR + "ult/sheet.png", 3, 2, 6, 0.1, false, _archer_ult_anchors()),
 			"charge": FrameAnimation.load_from_frames(ARCHER_ANI_DIR + "charge/", "archer_charge_f_", [{"index": 1, "duration": 999.0}], true),
 		},

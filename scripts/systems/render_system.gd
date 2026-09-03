@@ -5,6 +5,7 @@ static var debug_draw_hitboxes: bool = false
 
 const SHIELD_IMG = preload("res://assets/fx_shield.png")
 const FLAME_IMG = preload("res://assets/fx_flame.png")
+const ICE_IMG = preload("res://assets/ice.png")
 
 # 黑白滤镜（canvas_item 着色器）：高对比黑白二值化——以 0.5 亮度为界，阴影近纯黑、高光近纯白
 static var _grayscale_shader: Shader = null
@@ -427,7 +428,23 @@ static func _draw_fighter(game_node: CanvasItem, f: Fighter, cam_x: float, cam_y
 		if s.timer <= 0:
 			continue
 		if s.freeze:
-			game_node.draw_rect(Rect2(px, py, f.w, f.h), Color(1.0, 1.0, 1.0, 0.5))
+			# 冰冻：用 ice.png（2048² 全幅冰霜纹理）按角色框同比例裁剪中部后半透明覆盖，
+			# 避免整图 2048² 压扁进角色碰撞框丢失冰晶细节
+			if ICE_IMG:
+				var _iw: float = ICE_IMG.get_width()
+				var _ih: float = ICE_IMG.get_height()
+				var _aspect := f.w / maxf(f.h, 1.0)  # 目标（角色框）宽高比
+				var _sw: float = _ih * _aspect
+				var _sh: float = _ih
+				if _sw > _iw:
+					_sw = _iw
+					_sh = _iw / _aspect
+				game_node.draw_texture_rect_region(
+					ICE_IMG, Rect2(px, py, f.w, f.h),
+					Rect2((_iw - _sw) * 0.5, (_ih - _sh) * 0.5, _sw, _sh),
+					Color(1, 1, 1, 0.6))
+			else:
+				game_node.draw_rect(Rect2(px, py, f.w, f.h), Color(1.0, 1.0, 1.0, 0.5))
 		elif s.vfx_color:
 			game_node.draw_rect(Rect2(px, py, f.w, f.h), Color(s.vfx_color.r, s.vfx_color.g, s.vfx_color.b, 0.4))
 

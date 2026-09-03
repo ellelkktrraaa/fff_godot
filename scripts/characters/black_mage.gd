@@ -265,11 +265,11 @@ static func create_skills() -> Array:
 		Skill.new("ult", "终焉灭相", ULT_COOLDOWN, ULT_ENERGY, Callable(), Callable(_ult)),
 	]
 
-## 大招动画：output (1).png 10x6=60 帧（单次播放）
+## 大招动画：output (1).png 10x6=60 帧（单次播放，已拆分为 5x2 子图）
 static func _bm_ult_anim() -> FrameAnimation:
 	return FrameAnimation.load_from_sprite_sheet(
 		ULT_SHEET, ULT_SHEET_COLS, ULT_SHEET_ROWS, ULT_SHEET_FRAMES,
-		ULT_FRAME_DUR, false)
+		ULT_FRAME_DUR, false, [], Vector2i(5, 2))
 
 ## 一技能可用检查：施法中和强化状态（黄条期）均不可再次释放（强化期间 U 键转接凛冬）
 static func _skill1_can_use(owner: Fighter) -> bool:
@@ -463,31 +463,48 @@ static func break_ice(target: Fighter) -> void:
 static func get_intro() -> Dictionary:
 	var frames: Array = []
 	var durs: Array[int] = []
-	var atlas: Texture2D = load(INTRO_OUTPUT_SHEET)
-	if atlas:
-		var cw: int = atlas.get_width() / INTRO_OUTPUT_COLS
-		var ch: int = atlas.get_height() / INTRO_OUTPUT_ROWS
-		for i in range(INTRO_OUTPUT_COLS * INTRO_OUTPUT_ROWS):
-			var at := AtlasTexture.new()
-			at.atlas = atlas
-			at.region = Rect2((i % INTRO_OUTPUT_COLS) * cw, (i / INTRO_OUTPUT_COLS) * ch, cw, ch)
-			frames.append(at)
-			durs.append(INTRO_FRAME_DUR)
-	else:
-		printerr("[BlackMage] 登场动画 output.png 加载失败: ", INTRO_OUTPUT_SHEET)
-	var fin: Texture2D = load(INTRO_FINAL_IMG)
-	if fin:
-		var fcw: int = fin.get_width() / INTRO_FINAL_COLS
-		var fch: int = fin.get_height() / INTRO_FINAL_ROWS
-		for i in range(INTRO_FINAL_FRAMES):
-			var at2 := AtlasTexture.new()
-			at2.atlas = fin
-			at2.region = Rect2((i % INTRO_FINAL_COLS) * fcw, (i / INTRO_FINAL_COLS) * fch, fcw, fch)
-			frames.append(at2)
-			durs.append(INTRO_FRAME_DUR)
-	else:
-		printerr("[BlackMage] 登场动画 sheet.png 加载失败: ", INTRO_FINAL_IMG)
+	# output.png：10列x6行 → 拆分网格 (5,2)，子图 sub_cols=2 / sub_rows=3
+	_collect_split_sheet_frames(INTRO_OUTPUT_SHEET, INTRO_OUTPUT_COLS, INTRO_OUTPUT_ROWS,
+		INTRO_OUTPUT_COLS * INTRO_OUTPUT_ROWS, Vector2i(5, 2), frames, durs)
+	# sheet.png：5列x4行 → 拆分网格 (2,1)，sub_cols=3 / sub_rows=4
+	_collect_split_sheet_frames(INTRO_FINAL_IMG, INTRO_FINAL_COLS, INTRO_FINAL_ROWS,
+		INTRO_FINAL_FRAMES, Vector2i(2, 1), frames, durs)
 	return {"frames": frames, "durs": durs}
+
+## 从拆分图集（{basename}_split_{r}_{c}.png）按格收集 AtlasTexture 帧，供登场动画使用
+static func _collect_split_sheet_frames(
+	sheet_path: String, columns: int, rows: int, frame_count: int,
+	split_grid: Vector2i, frames: Array, durs: Array[int]) -> void:
+	var sub_cols: int = ceili(float(columns) / float(split_grid.x))
+	var sub_rows: int = ceili(float(rows) / float(split_grid.y))
+	var base: String = sheet_path.get_basename()
+	var ext: String = sheet_path.get_extension()
+	var sub00: Texture2D = load("%s_split_0_0.%s" % [base, ext])
+	if not sub00:
+		printerr("[BlackMage] 登场动画拆分图加载失败: ", "%s_split_0_0.%s" % [base, ext])
+		return
+	var cell_w: int = sub00.get_width() / sub_cols
+	var cell_h: int = sub00.get_height() / sub_rows
+	var atlases: Dictionary = {}
+	for i in range(frame_count):
+		var col: int = i % columns
+		var row: int = floori(float(i) / float(columns))
+		var gc: int = col / sub_cols
+		var gr: int = row / sub_rows
+		var key := Vector2i(gc, gr)
+		var atlas: Texture2D = atlases.get(key)
+		if atlas == null:
+			var p := "%s_split_%d_%d.%s" % [base, gr, gc, ext]
+			atlas = load(p)
+			if atlas == null:
+				printerr("[BlackMage] 登场动画拆分图加载失败: ", p)
+				continue
+			atlases[key] = atlas
+		var at := AtlasTexture.new()
+		at.atlas = atlas
+		at.region = Rect2((col % sub_cols) * cell_w, (row % sub_rows) * cell_h, cell_w, cell_h)
+		frames.append(at)
+		durs.append(INTRO_FRAME_DUR)
 
 ## 技能二锚点（sheet.png 前 19 帧）
 static func _bm_skill2_anchors() -> Array:
@@ -1093,7 +1110,7 @@ static func _bm_thunder_aura_anim() -> FrameAnimation:
 static func _bm_lightning_anim() -> FrameAnimation:
 	var anim = FrameAnimation.load_from_sprite_sheet(
 		LIGHTNING_SHEET, LIGHTNING_SHEET_COLS, LIGHTNING_SHEET_ROWS, LIGHTNING_SHEET_LOAD,
-		LIGHTNING_ANIM_DUR, true)
+		LIGHTNING_ANIM_DUR, true, [], Vector2i(2, 3))
 	if anim.frames.size() > 1:
 		anim.frames.remove_at(0)  # 剔除格 0（空帧）
 		anim._calc_total_duration()

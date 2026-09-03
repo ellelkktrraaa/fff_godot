@@ -124,7 +124,7 @@ static func _draw_enemy_bars(game_node: CanvasItem, font: Font):
 	var bar_w = 170.0
 	var bar_h = 14.0
 	var energy_bar_h = 8.0
-	var e_name = e.config.get("name", "AI")
+	var e_name = e.boss_name if e.boss_name != "" else e.config.get("name", "AI")
 	var e_bar_x = Constants.W - bar_x - bar_w
 
 	# HP bar

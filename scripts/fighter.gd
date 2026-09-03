@@ -50,6 +50,12 @@ var max_energy: float = 100
 var energy_regen: float = 0.05
 var energy_cost_multiplier: float = 1.0  # 能量消耗倍率（黑法师黑暗能量 = 0.5，1 黑暗能量 = 2 能量）
 
+# ── Boss Modifier（Boss 战外部配置字段；默认值 = 无影响，PVE/PVP 行为不变）──
+var damage_multiplier := 1.0          # 造成伤害倍率（apply_damage 唯一结算点统一放大）
+var damage_taken_multiplier := 1.0    # 受到伤害倍率
+var ai_overrides := {}                # AI_PRESETS 增量覆盖（modifier["ai"]，不改难度字符串）
+var boss_name := ""                   # Boss 显示名（空 = HUD 读 config.name）
+
 # Combat
 var attacking: bool = false
 var attack_timer: int = 0
@@ -265,6 +271,46 @@ func _snapshot_stats():
 	_stat_base["attack_speed"] = attack_speed
 	_stat_base["attack_range"] = attack_range
 	_stat_base["defense"] = defense
+
+## Boss 外部配置 Modifier 应用（setup() 之后、装配天赋之前调用）：
+## 1) 覆盖基础属性字段（hp 同时同步 max_hp/hp），并把对应项同步进 _stat_base 基快照，
+##    再以 Boss 数值为新基重放既有 add_stat_mod 修饰，防止天赋/技能基于旧基冲掉 Boss 数值；
+## 2) 解析全局倍率 damage_multiplier / damage_taken_multiplier、AI 增量 ai、显示名 boss_name。
+## 只写本实例字段，绝不修改共享 config 缓存（configs 由 CharConfigs.reset() 统一还原）。
+func apply_boss_modifiers(mods: Dictionary):
+	if mods.is_empty():
+		return
+	# ── 基础属性覆盖 ──
+	if mods.has("hp"):
+		max_hp = float(mods["hp"])
+		hp = max_hp
+	if mods.has("max_energy"):
+		max_energy = float(mods["max_energy"])
+	if mods.has("energy_regen"):
+		energy_regen = float(mods["energy_regen"])
+	if mods.has("attack_speed"):
+		attack_speed = float(mods["attack_speed"])
+	if mods.has("attack_range"):
+		attack_range = float(mods["attack_range"])
+	if mods.has("attack_damage"):
+		attack_damage = float(mods["attack_damage"])
+	if mods.has("defense"):
+		defense = float(mods["defense"])
+	# ── 属性基快照重建：以 Boss 数值为新基重放既有修饰 ──
+	_snapshot_stats()
+	for attr in _stat_mods:
+		_recalc_stat(attr)
+	if hp > max_hp:
+		hp = max_hp
+	# ── 全局倍率 / AI 增量 / 显示名 ──
+	if mods.has("damage_multiplier"):
+		damage_multiplier = float(mods["damage_multiplier"])
+	if mods.has("damage_taken_multiplier"):
+		damage_taken_multiplier = float(mods["damage_taken_multiplier"])
+	if mods.get("ai") is Dictionary:
+		ai_overrides = (mods["ai"] as Dictionary).duplicate()
+	if mods.has("boss_name"):
+		boss_name = str(mods["boss_name"])
 
 func add_stat_mod(attr: String, source: String, add: float = 0.0, mul: float = 1.0):
 	if not _stat_mods.has(attr):
@@ -866,6 +912,11 @@ static func apply_damage(target: Fighter, dmg: float, attacker: Fighter, knockba
 
 	# 角色钩子：受伤时触发
 	_call_on_damage_received(target, attacker, base_dmg)
+
+	# Boss Modifier 全局倍率（唯一结算点：普攻/技能/投射物/区域/灼烧等一切伤害在此统一放大）。
+	# 只放大最终结算，格挡/护盾/无敌等前置判定链不受影响；默认倍率 1.0 对 PVE/PVP 零影响。
+	var _dm := attacker.damage_multiplier if attacker else 1.0
+	final_dmg *= _dm * target.damage_taken_multiplier
 
 	var old_hp = target.hp
 	target.hp -= final_dmg

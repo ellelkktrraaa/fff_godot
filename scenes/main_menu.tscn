@@ -51,7 +51,7 @@ custom_minimum_size = Vector2(120, 120)
 expand_mode = 1
 stretch_mode = 4
 
-[node name="ComingButton" type="TextureButton" parent="MenuMain/ButtonRow"]
+[node name="BossButton" type="TextureButton" parent="MenuMain/ButtonRow"]
 layout_mode = 2
 custom_minimum_size = Vector2(120, 120)
 expand_mode = 1

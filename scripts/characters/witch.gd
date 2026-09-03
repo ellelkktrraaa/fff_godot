@@ -13,6 +13,9 @@ const SHEET_UZIMAKI = "res://assets/sheet_uzimaki.png"
 const WITCH_ANI_DIR = "res://assets/char_ani/witch/"
 const WITCH_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/witch_idle_foot_gaps.gd")
 const WITCH_SKILL2_FOOT_GAPS = preload("res://data/foot_gaps/witch_skill2_foot_gaps.gd")
+const WITCH_WALK_FOOT_GAPS = preload("res://data/foot_gaps/witch_walk_foot_gaps.gd")
+const WITCH_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/witch_jump_foot_gaps.gd")
+const WITCH_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/witch_attack_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	_inject_draw()
@@ -24,9 +27,11 @@ static func get_config() -> Dictionary:
 		"world_arrays": ["tornadoes","vortexes"],
 		"animations": {
 			"idle": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "idle/sheet.png", 5, 4, 17, 999.0, true, _witch_idle_anchors()),
-			"walk": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "walk/", "witch_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "jump/", "witch_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "attack/", "witch_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"walk": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "walk/sheet.png", 4, 4, 13, 0.1, true, _witch_walk_anchors()),
+			"jump": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "jump/sheet.png", 3, 3, 9, 0.1, true, _witch_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _witch_attack_anchors()),
+			# 施法姿态：与 attack 同一张贴图，但状态以 skill_ 开头 → apply_physics 不会覆盖
+			"skill_attack": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _witch_attack_anchors()),
 			"skill2": FrameAnimation.load_from_sprite_sheet(WITCH_ANI_DIR + "skill2/sheet.png", 4, 3, 11, 0.1, true, _witch_skill2_anchors()),
 			"ult": FrameAnimation.load_from_frames(WITCH_ANI_DIR + "ult/", "witch_ult_f_", [{"index": 1, "duration": 3.0}], false),
 		},
@@ -65,6 +70,42 @@ static func _witch_skill2_anchors() -> Array:
 			"center_dx": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CENTER[i],
 			"content_w": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_W[i],
 			"content_h": WITCH_SKILL2_FOOT_GAPS.WITCH_SKILL2_CONTENT_H[i],
+		})
+	return anchors
+
+static func _witch_walk_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_WALK_FOOT_GAPS.WITCH_WALK_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_WALK_FOOT_GAPS.WITCH_WALK_FOOT[i],
+			"head_gap": WITCH_WALK_FOOT_GAPS.WITCH_WALK_HEAD[i],
+			"center_dx": WITCH_WALK_FOOT_GAPS.WITCH_WALK_CENTER[i],
+			"content_w": WITCH_WALK_FOOT_GAPS.WITCH_WALK_CONTENT_W[i],
+			"content_h": WITCH_WALK_FOOT_GAPS.WITCH_WALK_CONTENT_H[i],
+		})
+	return anchors
+
+static func _witch_jump_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_FOOT[i],
+			"head_gap": WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_HEAD[i],
+			"center_dx": WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_CENTER[i],
+			"content_w": WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_CONTENT_W[i],
+			"content_h": WITCH_JUMP_FOOT_GAPS.WITCH_JUMP_CONTENT_H[i],
+		})
+	return anchors
+
+static func _witch_attack_anchors() -> Array:
+	var anchors := []
+	for i in range(WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_FOOT.size()):
+		anchors.append({
+			"foot_gap": WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_FOOT[i],
+			"head_gap": WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_HEAD[i],
+			"center_dx": WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_CENTER[i],
+			"content_w": WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_CONTENT_W[i],
+			"content_h": WITCH_ATTACK_FOOT_GAPS.WITCH_ATTACK_CONTENT_H[i],
 		})
 	return anchors
 
@@ -109,7 +150,7 @@ static func _skill1(owner: Fighter) -> Dictionary:
 static func _skill2(owner: Fighter) -> Dictionary:
 	var vx = owner.pos_x - 40
 	var vy = 350.0 # GROUND_Y - 30
-	var v_anim = FrameAnimation.load_from_sprite_sheet(SHEET_UZIMAKI, 5, 4, 18, 0.1, true)
+	var v_anim = FrameAnimation.load_from_sprite_sheet(SHEET_UZIMAKI, 5, 4, 18, 0.1, true, [], Vector2i(2, 1))
 	v_anim.play()
 	GameWorld.vortexes.append({"x":vx,"y":vy,"w":80,"h":30,"life":180,"timer":0,"damage":3,"tick_interval":30,"owner":owner,"type":"vortex","pull_strength":0.4,"img":IMG_VORTEX,"anim":v_anim})
 	owner.vy = -10
@@ -132,7 +173,26 @@ static func _ult(owner: Fighter) -> Dictionary:
 	owner.state = "ult"
 	owner.vx = 0
 	owner.vy = 0
+	# 全屏动画（mov 抽帧）：随大招播放的满屏演出，播完自动移除
+	var ult_mov := FrameAnimation.load_from_frames(WITCH_ANI_DIR + "ult_mov/", "", _ult_mov_specs(), false)
+	if ult_mov.frames.is_empty():
+		printerr("[Witch] ult_mov 帧加载失败")
+	else:
+		ult_mov.play()
+		GameWorld.active_overlays.append({
+			"anim": ult_mov,
+			"position": {"type": "fullscreen"},
+			"owner": owner,
+			"overlay_id": "witch_ult_mov",
+		})
 	return {"success": true}
+
+## 大招全屏动画帧规格（ult_mov_0001~0082，10fps → 每帧 0.1s）
+static func _ult_mov_specs() -> Array:
+	var specs := []
+	for i in range(1, 83):
+		specs.append({"index": i, "duration": 0.1, "filename": "ult_mov_%04d.png" % i})
+	return specs
 
 # ===== 全局实体更新（龙卷风 + 漩涡，从 tornado_system.gd 迁移至此）=====
 static func update_global():
@@ -217,6 +277,14 @@ static func _inject_draw():
 		return items
 	, 0)
 
+## 施法姿态：发射重力球后播 attack sheet（skill_attack 状态，apply_physics 不覆盖）。
+## 播完由 update_systems 回到飞行/待机状态。
+static func _start_attack_cast(owner: Fighter):
+	var comp: WitchComponent = owner.components.get_component("witch") if owner.components else null
+	if comp and comp.is_casting_ult:
+		return
+	owner.set_animation_state("skill_attack")
+
 ## 系统更新：动画帧推进 + 飞行模式播放 skill2（骑扫帚飞行）动画
 static func update_systems(f: Fighter):
 	# 多帧 sheet 动画需要每帧 update 才能换帧
@@ -225,9 +293,15 @@ static func update_systems(f: Fighter):
 	var witch_comp: WitchComponent = f.components.get_component("witch") if f.components else null
 	if not witch_comp:
 		return
-	# 飞行模式：持续播放 skill2 飞行动画（循环）；大招施法/陨石悬停期间保持 ult 动画
+	# 施法姿态（skill_attack）播完 → 回到飞行/常规状态（apply_physics 对 skill_ 开头状态不覆盖）
+	if f.image_state == "skill_attack" and f.current_anim and f.current_anim.is_finished():
+		if witch_comp.is_flying:
+			f.set_animation_state("skill2")
+		else:
+			f.set_animation_state("jump" if not f.grounded else "idle")
+	# 飞行模式：持续播放 skill2 飞行动画（循环）；施法姿态优先，播完回飞行
 	if witch_comp.is_flying and not witch_comp.is_casting_ult and f.state != "ult":
-		if f.image_state != "skill2":
+		if f.image_state != "skill2" and f.image_state != "skill_attack":
 			f.set_animation_state("skill2")
 	elif f.image_state == "skill2":
 		f.set_animation_state("idle")
@@ -236,19 +310,24 @@ static func update_systems(f: Fighter):
 static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 	var mx = 0
 	var witch_comp: WitchComponent = owner.components.get_component("witch") if owner.components else null
-	if keys.up and witch_comp:
-		if owner.grounded and not witch_comp.is_flying:
-			owner.vy = owner.jump_reduction * -10
-			owner.grounded = false
+	# ↑ 上升沿触发：跳跃/切换飞行都只在“按下”瞬间执行一次，
+	# 否则按住 ↑ 在空中会每帧在 飞行↔滞空 间来回切换导致画面闪烁
+	if keys.up:
+		if not owner.state_flags.get("witch_up_held", false):
+			owner.state_flags["witch_up_held"] = true
+			if witch_comp:
+				if owner.grounded and not witch_comp.is_flying:
+					owner.vy = owner.jump_reduction * -10
+					owner.grounded = false
+				elif not owner.grounded and not witch_comp.is_flying and not owner.attacking:
+					if owner.energy > 0:
+						witch_comp.is_flying = true
+						owner.vy = 0
+				elif witch_comp.is_flying:
+					witch_comp.is_flying = false
 			keys.up = false
-		elif not owner.grounded and not witch_comp.is_flying and not owner.attacking:
-			if owner.energy > 0:
-				witch_comp.is_flying = true
-				owner.vy = 0
-			keys.up = false
-		elif witch_comp.is_flying:
-			witch_comp.is_flying = false
-			keys.up = false
+	elif owner.state_flags.get("witch_up_held", false):
+		owner.state_flags["witch_up_held"] = false
 	if witch_comp and witch_comp.is_flying:
 		owner.energy -= witch_comp.fly_energy_drain
 		if owner.energy <= 0:
@@ -269,6 +348,7 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 			var r = s.try_use(owner)
 			if r.get("success"):
 				keys.attack = false
+				_start_attack_cast(owner)
 	if keys.skill1 and not owner.attacking:
 		var s = owner.get_skill("skill1")
 		if s:

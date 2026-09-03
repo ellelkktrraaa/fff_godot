@@ -4,7 +4,7 @@
 #   head_gap:  头顶到帧顶部的空隙
 #   center_dx: 角色内容中轴相对帧中心线的水平偏移（正=偏右）
 #   content_w/content_h: 角色实际内容尺寸
-# 帧尺寸: 768x1024
+# 帧尺寸: 384x512
 
 class_name ASTROLOGER_SKILL1_EARTH_PILLAR_FootGaps
 
@@ -24,5 +24,5 @@ const ASTROLOGER_SKILL1_EARTH_PILLAR_CONTENT_H: Array[int] = [-1, -1, -1, -1, -1
 ## 汇总（median）
 const ASTROLOGER_SKILL1_EARTH_PILLAR_FOOT_MEDIAN: int = 0
 const ASTROLOGER_SKILL1_EARTH_PILLAR_HEAD_MEDIAN: int = 0
-const ASTROLOGER_SKILL1_EARTH_PILLAR_CENTER_MEDIAN: float = 0
+const ASTROLOGER_SKILL1_EARTH_PILLAR_CENTER_MEDIAN: float = 0.0
 const ASTROLOGER_SKILL1_EARTH_PILLAR_HEIGHT_MEDIAN: int = 0

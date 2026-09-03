@@ -4,21 +4,28 @@ class_name PaladinCharacter
 const PaladinComponent = preload("res://scripts/components/paladin_component.gd")
 
 const PALADIN_ANI_DIR = "res://assets/char_ani/paladin/"
+const PALADIN_WALK_FOOT_GAPS = preload("res://data/foot_gaps/paladin_walk_foot_gaps.gd")
+const PALADIN_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/paladin_jump_foot_gaps.gd")
+const PALADIN_CHARGE_FOOT_GAPS = preload("res://data/foot_gaps/paladin_charge_foot_gaps.gd")
+const PALADIN_ULT_FOOT_GAPS = preload("res://data/foot_gaps/paladin_ult_foot_gaps.gd")
 
 static func get_config() -> Dictionary:
 	return {
 		"id": "paladin", "name": "圣骑士", "hp": 120, "max_energy": 100, "energy_regen": 0,
 		"speed": 2.1, "attack_range": 44, "attack_damage": 5,
 		"attack_cooldown": 60, "attack_delay": 8, "attack_duration": 30,
+		# idle/attack 仍是单帧贴图（无锚点，走整帧缩放路径）；放大 1.5 倍与新的多帧动画观感对齐
+		"image_scale": 1.9,
+		"attack_image_scale": 1.9,
 		"fields": {"divine_shield_active":false,"divine_shield_timer":0,"divine_shield_absorb":0.0,"holy_empower_active":false,"holy_empower_timer":0,"charging_skill1":false,"skill1_charge_time":0},
 		"world_arrays": [],
 		"animations": {
 			"idle": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "idle/", "paladin_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "walk/", "paladin_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "jump/", "paladin_jump_f_", [{"index": 1, "duration": 999.0}], true),
+			"walk": FrameAnimation.load_from_sprite_sheet(PALADIN_ANI_DIR + "walk/sheet.png", 4, 3, 10, 0.1, true, _paladin_walk_anchors()),
+			"jump": FrameAnimation.load_jump_sheet(PALADIN_ANI_DIR + "jump/sheet.png", 3, 2, 5, 0.2, _paladin_jump_anchors()),
 			"attack": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "attack/", "paladin_attack_f_", [{"index": 1, "duration": 0.5}], false),
-			"charge": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "charge/", "paladin_charge_f_", [{"index": 1, "duration": 999.0}], true),
-			"ult": FrameAnimation.load_from_frames(PALADIN_ANI_DIR + "ult/", "paladin_ult_f_", [{"index": 1, "duration": 3.0}], false),
+			"charge": FrameAnimation.load_from_sprite_sheet(PALADIN_ANI_DIR + "charge/sheet.png", 3, 3, 8, 0.1, true, _paladin_charge_anchors()),
+			"ult": FrameAnimation.load_from_sprite_sheet(PALADIN_ANI_DIR + "ult/sheet.png", 5, 5, 24, 0.1, false, _paladin_ult_anchors(), Vector2i(1, 2)),
 		},
 		"dex": {
 			"icon": "🛡️",
@@ -32,6 +39,40 @@ static func get_config() -> Dictionary:
 			]
 		},
 	}
+
+## 锚点辅助函数：把 tools/import_more.py 生成的 foot_gaps 常量组装成 FrameAnimation 锚点数组
+static func _build_anchors(foot: Array, head: Array, center: Array, cw: Array, ch: Array) -> Array:
+	var anchors := []
+	for i in range(foot.size()):
+		anchors.append({
+			"foot_gap": foot[i], "head_gap": head[i], "center_dx": center[i],
+			"content_w": cw[i], "content_h": ch[i],
+		})
+	return anchors
+
+static func _paladin_walk_anchors() -> Array:
+	return _build_anchors(
+		PALADIN_WALK_FOOT_GAPS.PALADIN_WALK_FOOT, PALADIN_WALK_FOOT_GAPS.PALADIN_WALK_HEAD,
+		PALADIN_WALK_FOOT_GAPS.PALADIN_WALK_CENTER, PALADIN_WALK_FOOT_GAPS.PALADIN_WALK_CONTENT_W,
+		PALADIN_WALK_FOOT_GAPS.PALADIN_WALK_CONTENT_H)
+
+static func _paladin_jump_anchors() -> Array:
+	return _build_anchors(
+		PALADIN_JUMP_FOOT_GAPS.PALADIN_JUMP_FOOT, PALADIN_JUMP_FOOT_GAPS.PALADIN_JUMP_HEAD,
+		PALADIN_JUMP_FOOT_GAPS.PALADIN_JUMP_CENTER, PALADIN_JUMP_FOOT_GAPS.PALADIN_JUMP_CONTENT_W,
+		PALADIN_JUMP_FOOT_GAPS.PALADIN_JUMP_CONTENT_H)
+
+static func _paladin_charge_anchors() -> Array:
+	return _build_anchors(
+		PALADIN_CHARGE_FOOT_GAPS.PALADIN_CHARGE_FOOT, PALADIN_CHARGE_FOOT_GAPS.PALADIN_CHARGE_HEAD,
+		PALADIN_CHARGE_FOOT_GAPS.PALADIN_CHARGE_CENTER, PALADIN_CHARGE_FOOT_GAPS.PALADIN_CHARGE_CONTENT_W,
+		PALADIN_CHARGE_FOOT_GAPS.PALADIN_CHARGE_CONTENT_H)
+
+static func _paladin_ult_anchors() -> Array:
+	return _build_anchors(
+		PALADIN_ULT_FOOT_GAPS.PALADIN_ULT_FOOT, PALADIN_ULT_FOOT_GAPS.PALADIN_ULT_HEAD,
+		PALADIN_ULT_FOOT_GAPS.PALADIN_ULT_CENTER, PALADIN_ULT_FOOT_GAPS.PALADIN_ULT_CONTENT_W,
+		PALADIN_ULT_FOOT_GAPS.PALADIN_ULT_CONTENT_H)
 
 static func _can_use_skill2(owner: Fighter) -> bool:
 	var comp: PaladinComponent = owner.components.get_component("paladin") if owner.components else null
@@ -138,6 +179,9 @@ static func _release_paladin_charge(owner: Fighter):
 #修复:冲刺+蓄力都结束后清空image_state,下一帧apply_physics自动恢复idle/walk
 static func update_systems(f: Fighter):
 	if f.hp <= 0: return
+	# 多帧 sheet 动画需要每帧 update 才能换帧（paladin 于 2026-09-03 换用多帧 sheet 后必须推进）
+	if f.current_anim and f.current_anim.is_playing():
+		f.current_anim.update(1.0)
 	# ── 绘制注入 ──
 	f.hud_resource_color = Color(1.0, 0.843, 0.0)  # 能量条金色
 	var comp = f.components.get_component("paladin") if f.components else null

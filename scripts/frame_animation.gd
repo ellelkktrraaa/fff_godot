@@ -103,10 +103,16 @@ static func load_from_sprite_sheet(
 	frame_count: int,
 	duration_seconds: float = 0.1,
 	p_loop: bool = false,
-	anchors: Array = []
+	anchors: Array = [],
+	split_grid: Vector2i = Vector2i(1, 1)
 ) -> FrameAnimation:
 	var anim = FrameAnimation.new()
 	anim.loop = p_loop
+
+	# 超大图集拆分模式：原图被切分成 {basename}_split_{网格行}_{网格列}.png 子图（均 ≤2048），
+	# 每帧按列/行定位到对应子图 + 子图内区域，锚点数据不变
+	if split_grid.x > 1 or split_grid.y > 1:
+		return _load_from_split_sheet(anim, sheet_path, columns, rows, frame_count, duration_seconds, anchors, split_grid)
 
 	var atlas: Texture2D = load(sheet_path)
 	if not atlas:
@@ -136,6 +142,63 @@ static func load_from_sprite_sheet(
 		loaded_count += 1
 
 	print("[FrameAnimation] Loaded ", loaded_count, "/", frame_count, " frames from sprite sheet ", sheet_path)
+	anim._calc_total_duration()
+	anim._calc_content_h_ref()
+	return anim
+
+## 拆分图集加载：sheet_path 为原图路径（用于推导子图命名），实际加载 {basename}_split_{r}_{c}.png
+static func _load_from_split_sheet(
+	anim: FrameAnimation,
+	sheet_path: String,
+	columns: int,
+	rows: int,
+	frame_count: int,
+	duration_seconds: float,
+	anchors: Array,
+	split_grid: Vector2i
+) -> FrameAnimation:
+	var sub_cols: int = ceili(float(columns) / float(split_grid.x))
+	var sub_rows: int = ceili(float(rows) / float(split_grid.y))
+	var base: String = sheet_path.get_basename()
+	var ext: String = sheet_path.get_extension()
+	var sub00: Texture2D = load("%s_split_0_0.%s" % [base, ext])
+	if not sub00:
+		push_error("[FrameAnimation] Failed to load split sheet: " + "%s_split_0_0.%s" % [base, ext])
+		return anim
+	var cell_w: int = sub00.get_width() / sub_cols
+	var cell_h: int = sub00.get_height() / sub_rows
+	var atlases: Dictionary = {}
+	var loaded_count := 0
+	for i in range(frame_count):
+		var col: int = i % columns
+		var row: int = floori(float(i) / float(columns))
+		var gc: int = col / sub_cols
+		var gr: int = row / sub_rows
+		var key := Vector2i(gc, gr)
+		var atlas: Texture2D = atlases.get(key)
+		if atlas == null:
+			var p := "%s_split_%d_%d.%s" % [base, gr, gc, ext]
+			atlas = load(p)
+			if atlas == null:
+				push_error("[FrameAnimation] Failed to load split sheet: " + p)
+				continue
+			atlases[key] = atlas
+		var atlas_tex := AtlasTexture.new()
+		atlas_tex.atlas = atlas
+		atlas_tex.region = Rect2((col % sub_cols) * cell_w, (row % sub_rows) * cell_h, cell_w, cell_h)
+		var anchor: Dictionary = anchors[i] if i < anchors.size() and anchors[i] is Dictionary else {}
+		anim.add_frame(
+			atlas_tex,
+			duration_seconds,
+			anchor.get("foot_gap", 0),
+			anchor.get("head_gap", 0),
+			anchor.get("center_dx", 0.0),
+			anchor.get("content_w", 0),
+			anchor.get("content_h", 0),
+		)
+		loaded_count += 1
+
+	print("[FrameAnimation] Loaded ", loaded_count, "/", frame_count, " frames from split sheet ", sheet_path)
 	anim._calc_total_duration()
 	anim._calc_content_h_ref()
 	return anim

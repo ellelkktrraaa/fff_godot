@@ -4,7 +4,7 @@
 #   head_gap:  头顶到帧顶部的空隙
 #   center_dx: 角色内容中轴相对帧中心线的水平偏移（正=偏右）
 #   content_w/content_h: 角色实际内容尺寸
-# 帧尺寸: 1344x768
+# 帧尺寸: 672x384
 
 class_name ROSE_ULT_FootGaps
 
@@ -24,5 +24,5 @@ const ROSE_ULT_CONTENT_H: Array[int] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
 ## 汇总（median）
 const ROSE_ULT_FOOT_MEDIAN: int = 0
 const ROSE_ULT_HEAD_MEDIAN: int = 0
-const ROSE_ULT_CENTER_MEDIAN: float = 0
+const ROSE_ULT_CENTER_MEDIAN: float = 0.0
 const ROSE_ULT_HEIGHT_MEDIAN: int = 0

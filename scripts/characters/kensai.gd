@@ -132,10 +132,10 @@ static func get_config() -> Dictionary:
 			"stance": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "sheet.png", 3, 3, 9, 0.1, false, _kensai_stance_anchors()),
 			"attack_windup": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "sheet.png", 3, 3, 5, 0.1, false, _kensai_stance_anchors()),
 			"skill1_windup": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "sheet.png", 3, 3, 6, 0.1, false, _kensai_stance_anchors()),
-			"attack1": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "attack1/sheet.png", 3, 2, ATK1_ANIM_FRAMES, 0.1, false, _kensai_attack1_anchors()),
+			"attack1": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "attack1/sheet.png", 3, 2, ATK1_ANIM_FRAMES, 0.1, false, _kensai_attack1_anchors(), Vector2i(2, 1)),
 			"attack3": _kensai_attack3_anim(),
 			"skill1": _kensai_skill1_anim(),
-			"qflh": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "skill_1/sheet.png", QFLH_ANIM_COLS, QFLH_ANIM_ROWS, QFLH_ANIM_FRAMES, QFLH_FRAME_DUR, false),
+			"qflh": FrameAnimation.load_from_sprite_sheet(KENSAI_ANI_DIR + "skill_1/sheet.png", QFLH_ANIM_COLS, QFLH_ANIM_ROWS, QFLH_ANIM_FRAMES, QFLH_FRAME_DUR, false, [], Vector2i(2, 2)),
 			"attack2": _kensai_attack2_anim(),
 			"attack_air": _kensai_attack_air_anim(),
 			"ult": FrameAnimation.load_from_frames(KENSAI_ANI_DIR + "ult/", "", _kensai_ult_specs(), false),
@@ -323,7 +323,7 @@ static func _kensai_skill1_anchors() -> Array:
 ## 玄鸟衔月闪动画：skill_2/sheet.png 5列×4行取帧1~18（含原舍弃帧；帧19/20 空白剔除）
 static func _kensai_skill1_anim() -> FrameAnimation:
 	var anim := FrameAnimation.load_from_sprite_sheet(
-		KENSAI_ANI_DIR + "skill_2/sheet.png", 5, 4, 20, 0.06, false, _kensai_skill1_anchors())
+		KENSAI_ANI_DIR + "skill_2/sheet.png", 5, 4, 20, 0.06, false, _kensai_skill1_anchors(), Vector2i(2, 1))
 	if anim.frames.size() >= 18:
 		anim.frames.assign(anim.frames.slice(0, 18))
 	anim._calc_total_duration()
@@ -1071,7 +1071,8 @@ static func update_systems(f: Fighter):
 						_ult_damage_zone(f, float(d))
 	# 千峰破云：屏幕正下方常驻显示最近2次普攻种类图标（1/2/3），左旧右新，新的替换旧的
 	# top_layer=true：绘制在全屏技能动画（千枫落华斩/孤鸿踏雪）之上，释放技能不被遮挡
-	if not comp.combo_seq.is_empty():
+	# 仅玩家操控的剑豪显示（敌方 AI 拼连招时不该把操作提示画到玩家屏幕）
+	if not comp.combo_seq.is_empty() and f.is_player:
 		# 解锁技能（21/31）释放窗口黄条倒计时：5 秒内未按 O 释放 → 组合刷新，需重新搭配解锁
 		if comp.combo_expire_timer > 0:
 			comp.combo_expire_timer -= 1

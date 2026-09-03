@@ -4,25 +4,25 @@
 #   head_gap:  头顶到帧顶部的空隙
 #   center_dx: 角色内容中轴相对帧中心线的水平偏移（正=偏右）
 #   content_w/content_h: 角色实际内容尺寸
-# 帧尺寸: 1024x768
+# 帧尺寸: 512x384
 
 class_name BERSERKER_SKILL2_TENDON_FootGaps
 
 ## 每帧脚底偏移（foot_gap），-1 表示该帧无有效像素
-const BERSERKER_SKILL2_TENDON_FOOT: Array[int] = [29, 35, 14, 38, 33, 33, 34, 31, 30, 31, 32, 32, 32, 31]
+const BERSERKER_SKILL2_TENDON_FOOT: Array[int] = [15, 18, 7, 19, 17, 17, 17, 16, 15, 16, 16, 16, 16, 16]
 
 ## 每帧头顶偏移（head_gap）
-const BERSERKER_SKILL2_TENDON_HEAD: Array[int] = [116, 4, 30, 0, 5, 5, 4, 5, 22, 30, 104, 101, 226, 224]
+const BERSERKER_SKILL2_TENDON_HEAD: Array[int] = [58, 2, 15, 0, 3, 3, 2, 3, 11, 15, 52, 51, 113, 112]
 
 ## 每帧中轴水平偏移（center_dx），渲染时用于让角色内容中轴对齐碰撞体中心
-const BERSERKER_SKILL2_TENDON_CENTER: Array[float] = [92.5, -6.5, -17.0, 24.0, 33.5, 35.0, 29.5, 37.0, 55.5, 84.0, 56.5, 58.5, 1.0, -1.0]
+const BERSERKER_SKILL2_TENDON_CENTER: Array[float] = [46.25, -3.25, -8.5, 12.0, 16.75, 17.5, 14.75, 18.5, 27.75, 42.0, 28.25, 29.25, 0.5, -0.5]
 
 ## 每帧内容尺寸（content_w / content_h）
-const BERSERKER_SKILL2_TENDON_CONTENT_W: Array[int] = [577, 825, 888, 736, 739, 736, 739, 732, 693, 586, 531, 537, 450, 454]
-const BERSERKER_SKILL2_TENDON_CONTENT_H: Array[int] = [623, 729, 724, 730, 730, 730, 730, 732, 716, 707, 632, 635, 510, 513]
+const BERSERKER_SKILL2_TENDON_CONTENT_W: Array[int] = [289, 413, 444, 368, 370, 368, 370, 366, 347, 293, 266, 269, 225, 227]
+const BERSERKER_SKILL2_TENDON_CONTENT_H: Array[int] = [312, 365, 362, 365, 365, 365, 365, 366, 358, 354, 316, 318, 255, 257]
 
 ## 汇总（median）
-const BERSERKER_SKILL2_TENDON_FOOT_MEDIAN: int = 32
-const BERSERKER_SKILL2_TENDON_HEAD_MEDIAN: int = 30
-const BERSERKER_SKILL2_TENDON_CENTER_MEDIAN: float = 35.0
-const BERSERKER_SKILL2_TENDON_HEIGHT_MEDIAN: int = 724
+const BERSERKER_SKILL2_TENDON_FOOT_MEDIAN: int = 16
+const BERSERKER_SKILL2_TENDON_HEAD_MEDIAN: int = 15
+const BERSERKER_SKILL2_TENDON_CENTER_MEDIAN: float = 17.5
+const BERSERKER_SKILL2_TENDON_HEIGHT_MEDIAN: int = 362

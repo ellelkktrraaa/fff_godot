@@ -87,11 +87,16 @@ func _ready():
 	call_deferred("_start_game")
 
 func _start_game():
-	var ai_char = GameWorld.selected_ai_char_id
-	if ai_char == "":
-		# 随机敌人只从可选角色中选（排除隐藏形态如黑法师）
-		var enemy_chars = CharacterFactory.get_visible_char_ids()
-		ai_char = enemy_chars[randi() % enemy_chars.size()]
+	# Boss 模式：敌人固定为该 Boss 的 char_id（不再随机、不再用 selected_ai_char_id）
+	var ai_char := ""
+	if GameWorld.is_boss_mode():
+		ai_char = BossSystem.resolve_enemy_char()
+	else:
+		ai_char = GameWorld.selected_ai_char_id
+		if ai_char == "":
+			# 随机敌人只从可选角色中选（排除隐藏形态如黑法师）
+			var enemy_chars = CharacterFactory.get_visible_char_ids()
+			ai_char = enemy_chars[randi() % enemy_chars.size()]
 	print("Starting game: player=", GameWorld.selected_char_id, " enemy=", ai_char)
 	# ── 玩家天赋：使用主菜单选择（若无选择则用默认测试集）──
 	var pool = GameWorld.talent_pool
@@ -118,8 +123,8 @@ func init_game(player_char_id: String, enemy_char_id: String):
 	GameWorld.reset_world()
 	CharacterFactory.reinject_draws()
 	
-	# 随机选图并加载平台
-	_load_random_map()
+	# Boss 模式加载 Boss 固定地图；PVE 传空路径（_load_map 内部走异步预载图优先/随机原逻辑）
+	_load_map(BossSystem.resolve_map_path())
 	
 	# 计算双方出生位置（站在最近的平台上）
 	var spawns = _find_spawn_positions()
@@ -134,6 +139,8 @@ func init_game(player_char_id: String, enemy_char_id: String):
 	GameWorld.enemy.setup(spawns.enemy_x, spawns.enemy_y, false, enemy_char_id, e_skills)
 	add_child(GameWorld.enemy)
 	GameWorld.entities = [GameWorld.player, GameWorld.enemy]
+	# Boss 战：enemy setup 之后、装配天赋之前应用 modifiers（enemy_talents 为空，顺序安全）
+	BossSystem.apply_to_enemy(GameWorld.enemy)
 	# ── 装配天赋 ──
 	_assemble_talents(GameWorld.player, GameWorld.player_talents)
 	_assemble_talents(GameWorld.enemy, GameWorld.enemy_talents)
@@ -258,8 +265,9 @@ func _find_spawn_positions() -> Dictionary:
 	print("[Spawn] 玩家: (", player_x, ", ", player_y, ") 敌人: (", enemy_x, ", ", enemy_y, ")")
 	return {"player_x": player_x, "player_y": player_y, "enemy_x": enemy_x, "enemy_y": enemy_y}
 
-## 随机选一张地图,实例化并加载平台
-func _load_random_map():
+## 加载指定地图并实例化平台。map_path 为空时保留原随机逻辑：
+## 优先使用异步重开时预加载的 _pending_map_path，再随机选图（MapManager.pick_random()）
+func _load_map(map_path: String = ""):
 	# 清理旧地图
 	if _current_map:
 		_current_map.queue_free()
@@ -268,7 +276,8 @@ func _load_random_map():
 	
 	MapManager.ensure_init()
 	# 优先使用异步重开时预加载的地图，否则随机选
-	var map_path = _pending_map_path
+	if map_path == "":
+		map_path = _pending_map_path
 	_pending_map_path = ""
 	if map_path == "":
 		map_path = MapManager.pick_random()
@@ -397,8 +406,12 @@ func _update():
 		if _intro_timer >= _intro_total:
 			_intro_timer = -1
 			GameWorld.unregister_draw_effect("battle_intro")
-			# 开场动画播放完毕 → 战斗 BGM 开始（两首随机，play_music 幂等，重开时不重复触发）
-			AudioManager.play_music("bgm_battle" if randi() % 2 == 0 else "bgm_battle_alt")
+			# 开场动画播放完毕 → 战斗 BGM 开始（play_music 幂等，重开时不重复触发）
+			# Boss 战固定播 bgm_boss；PVE 保持原两首随机
+			if GameWorld.is_boss_mode():
+				AudioManager.play_music("bgm_boss")
+			else:
+				AudioManager.play_music("bgm_battle" if randi() % 2 == 0 else "bgm_battle_alt")
 	if GameWorld.hit_stop > 0:
 		GameWorld.hit_stop -= 1
 		return
@@ -597,8 +610,13 @@ func _do_async_restart():
 	# 先让滤镜渲染一帧
 	await get_tree().process_frame
 	# 预选地图与敌方角色（与 _restart_game 保持一致）
-	_pending_map_path = MapManager.pick_random()
-	_pending_enemy_char = GameWorld.selected_ai_char_id if GameWorld.selected_ai_char_id != "" else _pick_enemy_char()
+	# Boss 模式固定用 BossSystem 解析值，重开不漂移；PVE 保持原随机策略
+	if GameWorld.is_boss_mode():
+		_pending_map_path = BossSystem.resolve_map_path()
+		_pending_enemy_char = BossSystem.resolve_enemy_char()
+	else:
+		_pending_map_path = MapManager.pick_random()
+		_pending_enemy_char = GameWorld.selected_ai_char_id if GameWorld.selected_ai_char_id != "" else _pick_enemy_char()
 	# 分帧收集所有角色动画贴图路径（避免一次性扫描上千文件卡住主循环）
 	_pending_load_paths = [_pending_map_path]
 	for cid in CharacterFactory.get_all_char_ids():
@@ -686,9 +704,14 @@ func _restart_game():
 			if tid != "":
 				GameWorld.player_talents.append(tid)
 	GameWorld.enemy_talents = []
-	# 优先使用异步重开时预选的敌方角色（已后台预加载其贴图）
-	var ai_char = _pending_enemy_char
-	_pending_enemy_char = ""
+	# Boss 模式：敌人固定为当前 Boss 的 char_id（不随重开漂移，优先于异步预选值）
+	var ai_char := ""
+	if GameWorld.is_boss_mode():
+		ai_char = BossSystem.resolve_enemy_char()
+	if ai_char == "":
+		# 优先使用异步重开时预选的敌方角色（已后台预加载其贴图）
+		ai_char = _pending_enemy_char
+	_pending_enemy_char = ""  # 无论哪条路径，预选角色本局已消费
 	if ai_char == "":
 		ai_char = GameWorld.selected_ai_char_id
 	if ai_char == "":

@@ -567,7 +567,7 @@ static func _spawn_rift(owner: Fighter, fx: float, fy: float, anim: FrameAnimati
 
 ## 加载大招法阵动画（sheet.png 为 7x7 网格，前4格/后5格为空白帧，运行时剔除格 4..43 共 40 帧）
 static func _load_ult_anim() -> FrameAnimation:
-	var anim = FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "ult/sheet.png", 7, 7, 44, 0.1, false, [])
+	var anim = FrameAnimation.load_from_sprite_sheet(EVOKER_ANI_DIR + "ult/sheet.png", 7, 7, 44, 0.1, false, [], Vector2i(2, 2))
 	if anim.frames.size() > 4:
 		anim.frames = anim.frames.slice(4, 44)  # 保留格 4..43 共 40 帧
 		if anim.frames.size() > 1:

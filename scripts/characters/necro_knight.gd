@@ -3,8 +3,97 @@ class_name NecroKnightCharacter
 const NECRO_ANI_DIR = "res://assets/char_ani/necro_knight/"
 const TEX_FALLBACK = preload("res://assets/char_ani/necro_knight/idle/necro_knight_idle_f_1.png")
 
+# ── 动画锚点（由 tools/import_slqs.py 生成）──
+const NECRO_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_idle_foot_gaps.gd")
+const NECRO_WALK_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_walk_foot_gaps.gd")
+const NECRO_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_attack_foot_gaps.gd")
+const NECRO_HORSE_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_horse_idle_foot_gaps.gd")
+const NECRO_MOUNTED_IDLE_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_idle_foot_gaps.gd")
+const NECRO_MOUNTED_TRANSITION_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_transition_foot_gaps.gd")
+const NECRO_MOUNTED_WALK_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_walk_foot_gaps.gd")
+const NECRO_MOUNTED_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_jump_foot_gaps.gd")
+const NECRO_MOUNTED_SKILL1_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_skill1_foot_gaps.gd")
+const NECRO_JUMP_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_jump_foot_gaps.gd")
+const NECRO_MOUNTED_ATTACK_FOOT_GAPS = preload("res://data/foot_gaps/necro_knight_mounted_attack_foot_gaps.gd")
+
 static func _fa(tex: Texture2D, dur: float = 999.0, loop: bool = true) -> FrameAnimation:
 	var a = FrameAnimation.new(); a.add_frame(tex, dur); a.loop = loop; return a
+
+## 组装锚点字典数组（foot_gaps 常量 → FrameAnimation 需要的 anchors）
+static func _build_anchors(foot: Array, head: Array, center: Array, cw: Array, ch: Array) -> Array:
+	var anchors := []
+	for i in range(foot.size()):
+		anchors.append({
+			"foot_gap": foot[i], "head_gap": head[i], "center_dx": center[i],
+			"content_w": cw[i], "content_h": ch[i],
+		})
+	return anchors
+
+static func _necro_idle_anchors() -> Array:
+	return _build_anchors(
+		NECRO_IDLE_FOOT_GAPS.NECRO_KNIGHT_IDLE_FOOT, NECRO_IDLE_FOOT_GAPS.NECRO_KNIGHT_IDLE_HEAD,
+		NECRO_IDLE_FOOT_GAPS.NECRO_KNIGHT_IDLE_CENTER, NECRO_IDLE_FOOT_GAPS.NECRO_KNIGHT_IDLE_CONTENT_W,
+		NECRO_IDLE_FOOT_GAPS.NECRO_KNIGHT_IDLE_CONTENT_H)
+
+static func _necro_walk_anchors() -> Array:
+	return _build_anchors(
+		NECRO_WALK_FOOT_GAPS.NECRO_KNIGHT_WALK_FOOT, NECRO_WALK_FOOT_GAPS.NECRO_KNIGHT_WALK_HEAD,
+		NECRO_WALK_FOOT_GAPS.NECRO_KNIGHT_WALK_CENTER, NECRO_WALK_FOOT_GAPS.NECRO_KNIGHT_WALK_CONTENT_W,
+		NECRO_WALK_FOOT_GAPS.NECRO_KNIGHT_WALK_CONTENT_H)
+
+static func _necro_attack_anchors() -> Array:
+	return _build_anchors(
+		NECRO_ATTACK_FOOT_GAPS.NECRO_KNIGHT_ATTACK_FOOT, NECRO_ATTACK_FOOT_GAPS.NECRO_KNIGHT_ATTACK_HEAD,
+		NECRO_ATTACK_FOOT_GAPS.NECRO_KNIGHT_ATTACK_CENTER, NECRO_ATTACK_FOOT_GAPS.NECRO_KNIGHT_ATTACK_CONTENT_W,
+		NECRO_ATTACK_FOOT_GAPS.NECRO_KNIGHT_ATTACK_CONTENT_H)
+
+static func _necro_horse_idle_anchors() -> Array:
+	return _build_anchors(
+		NECRO_HORSE_IDLE_FOOT_GAPS.NECRO_KNIGHT_HORSE_IDLE_FOOT, NECRO_HORSE_IDLE_FOOT_GAPS.NECRO_KNIGHT_HORSE_IDLE_HEAD,
+		NECRO_HORSE_IDLE_FOOT_GAPS.NECRO_KNIGHT_HORSE_IDLE_CENTER, NECRO_HORSE_IDLE_FOOT_GAPS.NECRO_KNIGHT_HORSE_IDLE_CONTENT_W,
+		NECRO_HORSE_IDLE_FOOT_GAPS.NECRO_KNIGHT_HORSE_IDLE_CONTENT_H)
+
+static func _necro_mounted_idle_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_IDLE_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_IDLE_FOOT, NECRO_MOUNTED_IDLE_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_IDLE_HEAD,
+		NECRO_MOUNTED_IDLE_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_IDLE_CENTER, NECRO_MOUNTED_IDLE_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_IDLE_CONTENT_W,
+		NECRO_MOUNTED_IDLE_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_IDLE_CONTENT_H)
+
+static func _necro_mounted_transition_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_TRANSITION_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_TRANSITION_FOOT, NECRO_MOUNTED_TRANSITION_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_TRANSITION_HEAD,
+		NECRO_MOUNTED_TRANSITION_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_TRANSITION_CENTER, NECRO_MOUNTED_TRANSITION_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_TRANSITION_CONTENT_W,
+		NECRO_MOUNTED_TRANSITION_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_TRANSITION_CONTENT_H)
+
+static func _necro_mounted_walk_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_WALK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_WALK_FOOT, NECRO_MOUNTED_WALK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_WALK_HEAD,
+		NECRO_MOUNTED_WALK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_WALK_CENTER, NECRO_MOUNTED_WALK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_WALK_CONTENT_W,
+		NECRO_MOUNTED_WALK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_WALK_CONTENT_H)
+
+static func _necro_mounted_jump_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_JUMP_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_JUMP_FOOT, NECRO_MOUNTED_JUMP_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_JUMP_HEAD,
+		NECRO_MOUNTED_JUMP_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_JUMP_CENTER, NECRO_MOUNTED_JUMP_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_JUMP_CONTENT_W,
+		NECRO_MOUNTED_JUMP_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_JUMP_CONTENT_H)
+
+static func _necro_mounted_skill1_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_SKILL1_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_SKILL1_FOOT, NECRO_MOUNTED_SKILL1_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_SKILL1_HEAD,
+		NECRO_MOUNTED_SKILL1_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_SKILL1_CENTER, NECRO_MOUNTED_SKILL1_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_SKILL1_CONTENT_W,
+		NECRO_MOUNTED_SKILL1_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_SKILL1_CONTENT_H)
+
+static func _necro_jump_anchors() -> Array:
+	return _build_anchors(
+		NECRO_JUMP_FOOT_GAPS.NECRO_KNIGHT_JUMP_FOOT, NECRO_JUMP_FOOT_GAPS.NECRO_KNIGHT_JUMP_HEAD,
+		NECRO_JUMP_FOOT_GAPS.NECRO_KNIGHT_JUMP_CENTER, NECRO_JUMP_FOOT_GAPS.NECRO_KNIGHT_JUMP_CONTENT_W,
+		NECRO_JUMP_FOOT_GAPS.NECRO_KNIGHT_JUMP_CONTENT_H)
+
+static func _necro_mounted_attack_anchors() -> Array:
+	return _build_anchors(
+		NECRO_MOUNTED_ATTACK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_ATTACK_FOOT, NECRO_MOUNTED_ATTACK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_ATTACK_HEAD,
+		NECRO_MOUNTED_ATTACK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_ATTACK_CENTER, NECRO_MOUNTED_ATTACK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_ATTACK_CONTENT_W,
+		NECRO_MOUNTED_ATTACK_FOOT_GAPS.NECRO_KNIGHT_MOUNTED_ATTACK_CONTENT_H)
 
 # ── 亡灵战马 ──
 const HORSE_W := 120.0
@@ -44,18 +133,33 @@ static func get_config() -> Dictionary:
 		"attack_cooldown": ATK_COOLDOWN, "attack_delay": 8, "attack_duration": 30,
 		"image_scale": 1.5,
 		"image_offset_y": 5,
+		# 技能动画：播放期间锁输入，动画播完由 update_systems 回到骑乘/待机状态
+		"skill_anim_states": ["mounted_skill1"],
+		# 锚点路径下 image_scale 不生效：anim_scale 全局基准，anim_scale_states 按状态放大。
+		# 头顶高度只由 anim_scale * 状态倍率 决定（渲染时 head_gap 被缩放抵消），
+		# 调整头顶对齐请改这里的倍率：新倍率 = 旧倍率 * (1 - 偏移像素 / content_h中位数)，
+		# 换算工具见 tools/import_slqs.py 的 head_offset_to_scale()。
+		# （mounted_idle/jump/skill1 的倍率已含原 HEAD_OFFSET -30/+35/-35 的换算）
+		"anim_scale": 1.2,
+		"anim_scale_states": {
+			"mounted_idle": 1.4, "mounted_transition": 1.33,
+			"mounted_walk": 1.4, "mounted_jump": 1.4,
+			"mounted_skill1": 1.4, "mounted_attack": 1.4,
+		},
 		"fields": {"horse_idx": -1, "horse_atk_cd": 0},
 		"world_arrays": [],
 		"animations": {
-			"idle":   FrameAnimation.load_from_frames(NECRO_ANI_DIR + "idle/", "necro_knight_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"walk":   FrameAnimation.load_from_frames(NECRO_ANI_DIR + "walk/", "necro_knight_walk_f_", [{"index": 1, "duration": 999.0}], true),
-			"jump":   FrameAnimation.load_from_frames(NECRO_ANI_DIR + "jump/", "necro_knight_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"attack": FrameAnimation.load_from_frames(NECRO_ANI_DIR + "attack/", "necro_knight_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"idle":   FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "idle/sheet.png", 3, 3, 9, 0.1, true, _necro_idle_anchors()),
+			"walk":   FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "walk/sheet.png", 3, 3, 7, 0.1, true, _necro_walk_anchors()),
+			"jump":   FrameAnimation.load_jump_sheet(NECRO_ANI_DIR + "jump/sheet.png", 2, 2, 4, 0.2, _necro_jump_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "attack/sheet.png", 3, 3, 7, 0.1, false, _necro_attack_anchors()),
 			"ult":    _fa(TEX_FALLBACK, 2.0, false),
-			"mounted_idle": FrameAnimation.load_from_frames(NECRO_ANI_DIR + "mounted_idle/", "necro_knight_mounted_idle_f_", [{"index": 1, "duration": 999.0}], true),
-			"mounted_walk": FrameAnimation.load_from_frames(NECRO_ANI_DIR + "mounted_walk/", "necro_knight_mounted_walk_f_", [{"index": 1, "duration": 0.3}, {"index": 2, "duration": 0.3}], true),
-			"mounted_jump": FrameAnimation.load_from_frames(NECRO_ANI_DIR + "mounted_jump/", "necro_knight_mounted_jump_f_", [{"index": 1, "duration": 999.0}], true),
-			"mounted_attack": FrameAnimation.load_from_frames(NECRO_ANI_DIR + "mounted_attack/", "necro_knight_mounted_attack_f_", [{"index": 1, "duration": 0.5}], false),
+			"mounted_idle": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "mounted_idle/sheet.png", 4, 3, 12, 0.1, true, _necro_mounted_idle_anchors()),
+			"mounted_transition": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "mounted_transition/sheet.png", 4, 4, 16, 0.1, false, _necro_mounted_transition_anchors()),
+			"mounted_walk": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "mounted_walk/sheet.png", 3, 3, 9, 0.1, true, _necro_mounted_walk_anchors()),
+			"mounted_jump": FrameAnimation.load_jump_sheet(NECRO_ANI_DIR + "mounted_jump/sheet.png", 4, 3, 10, 0.3, _necro_mounted_jump_anchors()),
+			"mounted_skill1": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "mounted_skill1/sheet.png", 4, 3, 10, 0.1, false, _necro_mounted_skill1_anchors()),
+			"mounted_attack": FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "mounted_attack/sheet.png", 3, 2, 5, 0.1, false, _necro_mounted_attack_anchors()),
 		},
 		"dex": {
 			"icon": "💀",
@@ -94,6 +198,7 @@ static func _comp_mount(fighter: Fighter):
 	var comp = _get_comp(fighter)
 	if comp and comp.has_method("mount"):
 		comp.mount()
+	fighter.set_animation_state("mounted_transition")  # 上马过渡动画
 
 static func _comp_dismount(fighter: Fighter, forced: bool = false):
 	var comp = _get_comp(fighter)
@@ -255,6 +360,15 @@ static func update_systems(owner: Fighter):
 	# ── 骑乘动画帧推进（多帧动画需要每帧 update） ──
 	if owner.current_anim:
 		owner.current_anim.update(1.0)
+	# 上马过渡动画播完 → 进入骑乘待机
+	if owner.image_state == "mounted_transition" and owner.current_anim and owner.current_anim.is_finished():
+		owner.set_animation_state("mounted_idle" if _is_mounted(owner) else "idle")
+	# 地裂施法动画播完 → 回到骑乘状态
+	if owner.image_state == "mounted_skill1" and owner.current_anim and owner.current_anim.is_finished():
+		if _is_mounted(owner):
+			owner.set_animation_state("mounted_jump" if not owner.grounded else "mounted_idle")
+		else:
+			owner.set_animation_state("idle")
 	# ── 骑乘状态缩放 ──
 	if _is_mounted(owner):
 		owner.config["image_scale"] = 3.5
@@ -318,13 +432,10 @@ static func _skill1(owner: Fighter):
 		_soul_binding(owner)
 
 ## 铁骑·地裂：跳起后 40° 斜下坠地，AOE 伤害 15
-static var _slam_rise_tex = preload("res://assets/char_ani/necro_knight/mounted_jump/necro_knight_mounted_jump_f_1.png")
-static var _slam_crash_tex = preload("res://assets/fx_necro_slam.png")
-
 static func _mounted_slam(owner: Fighter):
+	owner.set_animation_state("mounted_skill1")  # 铁骑·地裂施法动画（播完由 update_systems 回骑乘状态）
 	if not owner.grounded:
 		# 已在空中：直接坠地
-		owner.state_flags["draw_texture_override"] = _slam_crash_tex
 		_start_slam_crash(owner)
 	else:
 		# 跳起
@@ -332,13 +443,11 @@ static func _mounted_slam(owner: Fighter):
 		owner.vx = owner.facing * 3
 		owner.grounded = false
 		owner.state_flags["necro_slam_rising"] = true
-		owner.state_flags["draw_texture_override"] = _slam_rise_tex
 	Fighter.emit_particles(owner.pos_x + owner.w / 2.0, owner.pos_y + owner.h / 2.0, 15, Color(0.3, 0.4, 0.9), 5, 8, "circle")
 
 static func _start_slam_crash(owner: Fighter):
 	owner.state_flags.erase("necro_slam_rising")
 	owner.state_flags["necro_slam_crashing"] = true
-	owner.state_flags["draw_texture_override"] = _slam_crash_tex
 	var angle = deg_to_rad(30.0)
 	var speed := 12.0
 	owner.vy = speed * sin(angle)
@@ -362,7 +471,6 @@ static func _update_mounted_slam(owner: Fighter):
 				f.vx += owner.vx * 0.3
 				f.vy += owner.vy * 0.3
 		if owner.grounded:
-			owner.state_flags["draw_texture_override"] = _slam_crash_tex
 			# 着陆 AOE 伤害
 			cx = owner.pos_x + owner.w / 2.0
 			cy = owner.pos_y + owner.h / 2.0
@@ -638,7 +746,11 @@ static func handle_input(owner: Fighter, keys: Dictionary) -> int:
 		horse.x = owner.pos_x
 		horse.y = owner.pos_y
 	if mounted:
-		if owner.attacking:
+		if owner.image_state == "mounted_transition":
+			pass  # 上马过渡动画期间锁定动画状态
+		elif owner.image_state == "mounted_skill1":
+			pass  # 铁骑·地裂施法动画期间锁定（播完由 update_systems 回骑乘状态）
+		elif owner.attacking:
 			if owner.image_state != "mounted_attack":
 				owner.set_animation_state("mounted_attack")
 		else:
@@ -666,7 +778,7 @@ static var _horse_walk_anim: FrameAnimation = null
 static func _load_animations():
 	if _horse_idle_anim:
 		return
-	_horse_idle_anim = FrameAnimation.load_from_frames(NECRO_ANI_DIR + "horse_idle/", "necro_knight_horse_idle_f_", [{"index": 1, "duration": 999.0}], true)
+	_horse_idle_anim = FrameAnimation.load_from_sprite_sheet(NECRO_ANI_DIR + "horse_idle/sheet.png", 4, 4, 13, 0.1, true, _necro_horse_idle_anchors())
 	_horse_walk_anim = FrameAnimation.load_from_frames(NECRO_ANI_DIR + "horse_walk/", "necro_knight_horse_walk_f_", [{"index": 1, "duration": 0.333}, {"index": 2, "duration": 0.333}], true)
 
 static func _draw_horses(_font, cam_x, _cam_y = 0.0):

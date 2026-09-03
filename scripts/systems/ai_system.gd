@@ -540,6 +540,12 @@ static func update_ai(ai_think_delay: int) -> int:
 		return ai_think_delay
 	
 	var diff = Constants.AI_PRESETS.get(GameWorld.effective_ai_difficulty(), Constants.AI_PRESETS["medium"])
+	# Boss Modifier AI 增量：对 preset 副本做增量覆盖（不改难度字符串，地狱专属战术照常生效）。
+	# 只在副本上合并，绝不污染 Constants.AI_PRESETS 全局预设。
+	if GameWorld.enemy and not GameWorld.enemy.ai_overrides.is_empty():
+		diff = diff.duplicate()
+		for k in GameWorld.enemy.ai_overrides:
+			diff[k] = GameWorld.enemy.ai_overrides[k]
 
 	# ── 7.2 战术模式切换 [AI-ENHANCE]：每 3~5 秒 20% 概率切激进/稳健；切换时 1 帧思考停顿 ──
 	_update_tactical_mode()

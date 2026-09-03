@@ -108,11 +108,10 @@ const ULT_DAMAGE_END := 19       # 出伤持续到第 19 帧
 # ── 子技能：战吼（7键） ──
 const SUB_ENERGY := 0
 const SUB_COOLDOWN := 1200       # 20秒
-const WAR_CRY_FRAMES := 12       # 战吼动画帧数（sheet4: 4×3）
-const WAR_CRY_DURATION := 73     # 战吼持续 = 动画播放一遍（sheet4: 12帧，实际 12×6+1=73 帧）
+const WAR_CRY_FRAMES := 10       # 战吼动画帧数（warcry/sheet.png: 4×3，10帧）
+const WAR_CRY_DURATION := 61     # 战吼持续 = 动画播放一遍（10帧，实际 10×6+1=61 帧）
 const WAR_CRY_DEFENSE := 50.0    # 减伤50%（护甲公式 defense/(defense+50) 等效）
 const WAR_CRY_RAGE_HP := 0.4     # 血量低于上限 40% 时使用 → 狂暴模式
-const BERSERKER_WARCY_SHEET = "res://assets/sheet4.png"          # 战吼动画（4×3, 12帧）
 const BERSERKER_GROUND_SPLIT_SHEET = "res://assets/sheet5.png"   # 地裂动画（4×4, 16帧）
 
 # 狂暴模式红色斗气（透明 png 叠加在角色身上，20帧切换循环）
@@ -259,7 +258,7 @@ static func get_config() -> Dictionary:
 		# 技能动画状态：播放期间锁定全部输入，只有受击可提前结束（招架 skill2 保留按 J 出招，不在锁定名单）
 		"skill_anim_states": ["skill1", "skill2_tendon", "skill2_ground_split", "warcry", "ult"],
 		# 单个技能动画的独立缩放倍率（按 image_state）
-		"anim_scale_states": {"skill2_tendon": 1.8},  # 断筋斩动画放大 1.8 倍
+		"anim_scale_states": {"skill2_tendon": 0.8},  # 断筋斩动画 0.8 倍
 		"fields": {},
 		"world_arrays": [],
 		"animations": {
@@ -268,9 +267,9 @@ static func get_config() -> Dictionary:
 			"jump":   FrameAnimation.load_jump_sheet(BERSERKER_ANI_DIR + "jump/sheet.png", 3, 3, 9, 0.4, _berserker_jump_anchors()),
 			"attack": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "attack/sheet.png", 3, 2, 6, 0.05, false, _berserker_attack_anchors()),
 			"skill1": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill1/sheet.png", 3, 3, 8, 0.1, false, _berserker_skill1_anchors()),
-			"skill2": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill2/sheet1.png", 5, 4, 17, 0.1, false, _berserker_skill2_parry_anchors()),
+			"skill2": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill2/sheet1.png", 5, 4, 17, 0.1, false, _berserker_skill2_parry_anchors(), Vector2i(2, 1)),
 			"skill2_tendon": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "skill2/sheet2.png", 4, 4, 14, 0.1, false, _berserker_skill2_tendon_anchors()),
-			"warcry": FrameAnimation.load_from_sprite_sheet(BERSERKER_WARCY_SHEET, 4, 3, 12, 0.1, false, _berserker_warcry_anchors()),
+			"warcry": FrameAnimation.load_from_sprite_sheet(BERSERKER_ANI_DIR + "warcry/sheet.png", 4, 3, 10, 0.1, false, _berserker_warcry_anchors()),
 			"skill2_ground_split": FrameAnimation.load_from_sprite_sheet(BERSERKER_GROUND_SPLIT_SHEET, 4, 4, 16, 0.1, false, _berserker_ground_split_anchors()),
 			"ult":    FrameAnimation.load_from_frames(BERSERKER_ANI_DIR + "ult/", "berserker_ult_f_", _ult_frame_specs(), false),
 		},
@@ -452,9 +451,9 @@ static func _in_tendon_range(owner: Fighter, f: Fighter) -> bool:
 	return absf(cx - fx) < (TENDON_SLASH_RANGE + f.w) / 2.0 and absf(cy - fy) < (TENDON_SLASH_RANGE + f.h) / 2.0
 
 # ===== 子技能：战吼（7键） =====
-## 发出战吼震慑敌人：动画播放一遍（1.2s）内霸体+减伤50%；全屏敌人随机 debuff；残血触发狂暴模式
+## 发出战吼震慑敌人：动画播放一遍（1s）内霸体+减伤50%；全屏敌人随机 debuff；残血触发狂暴模式
 static func _sub_warcry(owner: Fighter) -> Dictionary:
-	# 播放战吼动画（sheet4, 4×3, 12帧）；技能相关时间以动画播放一遍为准（12×0.1s=1.2s=72帧）
+	# 播放战吼动画（warcry/sheet.png, 4×3, 10帧）；技能相关时间以动画播放一遍为准（10×0.1s=1s≈60帧）
 	owner.set_animation_state("warcry")
 	owner.state_flags["berserker_warcry"] = {"timer": WAR_CRY_DURATION}
 	GameWorld.trigger_shake(8.0, 12)  # 子技能（战吼）：屏幕震动

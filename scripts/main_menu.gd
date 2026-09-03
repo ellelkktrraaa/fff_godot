@@ -4,7 +4,7 @@ extends Control
 @onready var bg_texture = $Background
 @onready var title_texture = $MenuMain/Title
 @onready var pve_button = $MenuMain/ButtonRow/PVEButton
-@onready var coming_button = $MenuMain/ButtonRow/ComingButton
+@onready var boss_button = $MenuMain/ButtonRow/BossButton
 @onready var pvp_button = $MenuMain/ButtonRow/PVPButton
 @onready var pokedex_btn = $PokedexBtn
 @onready var exit_btn = $ExitBtn
@@ -71,8 +71,8 @@ var _loading_dots: Array = []
 
 const IMG_TITLE = preload("res://assets/ui_title.png")
 const IMG_PVE = preload("res://assets/ui_btn_pve.png")
-const IMG_COMING = preload("res://assets/ui_btn_coming.png")
 const IMG_PVP = preload("res://assets/ui_btn_pvp.png")
+const IMG_BOSS = preload("res://assets/ui_btn_coming.png")
 const IMG_BG = preload("res://assets/bg_main_menu.png")
 const IMG_DIFF_EASY = preload("res://assets/ui_diff_easy.png")
 const IMG_DIFF_MEDIUM = preload("res://assets/ui_diff_medium.png")
@@ -96,12 +96,13 @@ func _ready():
 	title_texture.gui_input.connect(_on_title_clicked)
 	bg_texture.texture = IMG_BG
 	pve_button.texture_normal = IMG_PVE; pve_button.texture_pressed = IMG_PVE
-	coming_button.texture_normal = IMG_COMING; coming_button.texture_pressed = IMG_COMING
 	pvp_button.texture_normal = IMG_PVP; pvp_button.texture_pressed = IMG_PVP
+	boss_button.texture_normal = IMG_BOSS; boss_button.texture_pressed = IMG_BOSS
+	boss_button.tooltip_text = "挑战首领（Boss 战）"
 	
 	pve_button.pressed.connect(_on_pve_pressed)
 	pve_button.gui_input.connect(_on_pve_gui_input)  # 右键 = 练习模式
-	coming_button.pressed.connect(_on_coming_pressed)
+	boss_button.pressed.connect(_on_boss_pressed)
 	pvp_button.pressed.connect(_on_pvp_pressed)
 	pokedex_btn.pressed.connect(_on_pokedex_pressed)
 	exit_btn.pressed.connect(_on_exit_pressed)
@@ -1003,8 +1004,12 @@ func _on_diff_back_pressed():
 	pokedex_btn.visible = true
 	exit_btn.visible = true
 
-func _on_coming_pressed():
-	_show_toast("功能开发中，敬请期待")
+func _on_boss_pressed():
+	# 进入 Boss 选择界面；清掉可能残留的 Boss 上下文，避免普通 PVE 误进 Boss 流程
+	GameWorld.boss_id = ""
+	GameWorld.practice_mode = false
+	GameWorld.skip_to_char_select = false
+	get_tree().change_scene_to_file("res://scenes/boss_select.tscn")
 
 func _on_pvp_pressed():
 	_show_toast("局域网联机开发中，敬请期待")

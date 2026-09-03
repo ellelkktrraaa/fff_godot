@@ -10,6 +10,9 @@ var game_over := false
 var game_result := ""  # "win" or "lose"
 var game_mode := "pve" # "pve" or "pvp"
 var difficulty := "medium"
+# Boss 战上下文：非空 = 当前为 Boss 战（敌人/地图/数值由 BossSystem 决定）。
+# Boss 战沿用 game_mode=="pve"，不新增 game_mode 值；空串 = 普通 PVE，行为完全不变。
+var boss_id := ""
 var frame := 0
 var hit_stop := 0
 var time_stop_timer := 0  # 全局时停剩余帧数（60帧=1秒），与角色大招的实体 time_stop 并存
@@ -218,6 +221,10 @@ func get_opponent(fighter):
 	if fighter == player:
 		return enemy
 	return player
+
+## 是否 Boss 战（由 BossSystem 决定敌人/地图/数值；不改变 game_mode 语义）
+func is_boss_mode() -> bool:
+	return boss_id != ""
 
 ## 时缓：duration 帧内逻辑 3 倍慢速（每 factor 个 tick 才跑一帧），可叠加取最大。
 ## factor 为 0 时用默认 SLOW_FACTOR(3)；传更大值（如 6/8）可制造更极限的慢镜头。

@@ -41,6 +41,9 @@ static func update_pickups_and_end():
 		# 时缓结束 → 结算胜负
 		GameWorld.game_over = true
 		GameWorld.game_result = GameWorld.death_slowmo_result
+		# Boss 战胜利 → 推进难度解锁（幂等，重复调用不越级、不重复写盘）
+		if GameWorld.is_boss_mode() and GameWorld.death_slowmo_result == "win":
+			ProgressSystem.on_boss_defeated(GameWorld.boss_id, GameWorld.difficulty)
 
 # ── 练习模式：死亡复活（60 帧 = 1 秒）──
 const PRACTICE_RESPAWN_FRAMES := 60

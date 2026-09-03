@@ -48,7 +48,7 @@ static func get_config() -> Dictionary:
 				{"index": 12, "duration": 0.2}, {"index": 13, "duration": 0.2}
 			], false),
 			"charge": FrameAnimation.load_from_frames(ASSASSIN_ANI_DIR + "charge/", "assassin_charge_f_", [{"index": 1, "duration": 999.0}], true),
-			"ult_head": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors()),
+			"ult_head": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors(), Vector2i(3, 2)),
 			"ult_tail": FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_tail/sheet.png", 3, 2, 6, 0.06, false, _assassin_ult_tail_anchors()),
 		},
 		"dex": {
@@ -238,7 +238,7 @@ static func _ult(owner: Fighter) -> Dictionary:
 	var comp: AssassinComponent = owner.components.get_component("assassin") if owner.components else null
 	
 	# 大招动画：先播 ult_head（43 帧），播完立即接 ult_tail（6 帧），合并为一段连续动画
-	var head_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors())
+	var head_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_head/sheet.png", 7, 7, 43, 0.1, false, _assassin_ult_head_anchors(), Vector2i(3, 2))
 	var tail_anim = FrameAnimation.load_from_sprite_sheet(ASSASSIN_ANI_DIR + "ult_tail/sheet.png", 3, 2, 6, 0.06, false, _assassin_ult_tail_anchors())
 	var ult_anim := FrameAnimation.new()
 	ult_anim.loop = false

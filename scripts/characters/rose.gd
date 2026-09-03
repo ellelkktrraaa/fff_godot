@@ -27,13 +27,13 @@ static func get_config() -> Dictionary:
 			"idle": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _rose_idle_anchors()),
 			"walk": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "walk/sheet.png", 4, 3, 10, 0.1, true, _rose_walk_anchors()),
 			"jump": FrameAnimation.load_jump_sheet(ROSE_ANI_DIR + "jump/sheet.png", 2, 2, 4, 0.2, _rose_jump_anchors()),
-			"attack": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _rose_attack_anchors()),
+			"attack": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "attack/sheet.png", 4, 3, 10, 0.05, false, _rose_attack_anchors(), Vector2i(2, 1)),
 			"skill1": _rose_skill1_anim(),
 			"skill1_plus_bladeeffect": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet.png", 4, 3, 11, 0.1, false, _rose_skill1_plus_bladeeffect_anchors()),
 			"skill2": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2/sheet.png", 3, 2, 6, 0.08, false, _rose_skill2_anchors()),
 			"skill2_enhanced": FrameAnimation.load_from_frames(ROSE_ANI_DIR + "skill2_enhanced/", "rose_skill2_enhanced_f_", [{"index": 1, "duration": 3.0}], false),
 			"skill2_plus": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill2_plus/sheet.png", 4, 3, 11, 0.1, false, _rose_skill2_plus_anchors()),
-			"ult": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors()),
+			"ult": FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "ult/sheet.png", 8, 7, 54, 0.1, false, _rose_ult_anchors(), Vector2i(3, 2)),
 			"charge": _rose_charge_anim(),
 		},
 		"dex": {
@@ -383,7 +383,7 @@ static func _has_normal_blade(f: Fighter) -> bool:
 
 ## 常态一技能刀光动画（sheet1.png，4x4=16 帧，替代原 fx_rose_slash.png 静态贴图）
 static func _rose_skill1_blade_anim() -> FrameAnimation:
-	return FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet1.png", 4, 4, 16, 0.1, false)
+	return FrameAnimation.load_from_sprite_sheet(ROSE_ANI_DIR + "skill1_plus_bladeeffect/sheet1.png", 4, 4, 16, 0.1, false, [], Vector2i(2, 1))
 
 ## 强化一技能四连斩刀光动画（sheet.png，4x3=11 帧，替代原 fx_rose_enh_slash1~4.png）
 static func _rose_enh_blade_anim() -> FrameAnimation:

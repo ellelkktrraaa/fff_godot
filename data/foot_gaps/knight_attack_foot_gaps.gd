@@ -4,25 +4,25 @@
 #   head_gap:  头顶到帧顶部的空隙
 #   center_dx: 角色内容中轴相对帧中心线的水平偏移（正=偏右）
 #   content_w/content_h: 角色实际内容尺寸
-# 帧尺寸: 1344x768
+# 帧尺寸: 672x384
 
 class_name KNIGHT_ATTACK_FootGaps
 
 ## 每帧脚底偏移（foot_gap），-1 表示该帧无有效像素
-const KNIGHT_ATTACK_FOOT: Array[int] = [37, 37, 37, 49, 49, 49, 49, 49]
+const KNIGHT_ATTACK_FOOT: Array[int] = [19, 19, 19, 25, 25, 25, 25, 25]
 
 ## 每帧头顶偏移（head_gap）
-const KNIGHT_ATTACK_HEAD: Array[int] = [72, 72, 74, 196, 153, 137, 138, 140]
+const KNIGHT_ATTACK_HEAD: Array[int] = [36, 36, 37, 98, 77, 69, 69, 70]
 
 ## 每帧中轴水平偏移（center_dx），渲染时用于让角色内容中轴对齐碰撞体中心
-const KNIGHT_ATTACK_CENTER: Array[float] = [-6.0, -6.0, 24.0, 37.0, 58.0, 55.5, 57.0, 57.5]
+const KNIGHT_ATTACK_CENTER: Array[float] = [-3.0, -3.0, 12.0, 18.5, 29.0, 27.75, 28.5, 28.75]
 
 ## 每帧内容尺寸（content_w / content_h）
-const KNIGHT_ATTACK_CONTENT_W: Array[int] = [470, 470, 530, 1024, 1078, 1095, 1096, 1095]
-const KNIGHT_ATTACK_CONTENT_H: Array[int] = [659, 659, 657, 523, 566, 582, 581, 579]
+const KNIGHT_ATTACK_CONTENT_W: Array[int] = [235, 235, 265, 512, 539, 548, 548, 548]
+const KNIGHT_ATTACK_CONTENT_H: Array[int] = [330, 330, 329, 262, 283, 291, 291, 290]
 
 ## 汇总（median）
-const KNIGHT_ATTACK_FOOT_MEDIAN: int = 49
-const KNIGHT_ATTACK_HEAD_MEDIAN: int = 138
-const KNIGHT_ATTACK_CENTER_MEDIAN: float = 55.5
-const KNIGHT_ATTACK_HEIGHT_MEDIAN: int = 582
+const KNIGHT_ATTACK_FOOT_MEDIAN: int = 25
+const KNIGHT_ATTACK_HEAD_MEDIAN: int = 69
+const KNIGHT_ATTACK_CENTER_MEDIAN: float = 27.75
+const KNIGHT_ATTACK_HEIGHT_MEDIAN: int = 291

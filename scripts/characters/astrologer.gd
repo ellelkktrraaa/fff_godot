@@ -406,9 +406,9 @@ static func get_config() -> Dictionary:
 		}, "world_arrays": ["craters"],  # craters: 陨石坑列表
 		"skill_anim_states": ["skill1", "skill2"],  # 技能动画：播放期间锁输入，受击可提前结束
 		"animations": {
-			"idle":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
-			"walk":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
-			"jump":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors()),
+			"idle":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors(), Vector2i(2, 2)),
+			"walk":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors(), Vector2i(2, 2)),
+			"jump":   FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "idle/sheet.png", 4, 4, 15, 0.1, true, _astrologer_idle_anchors(), Vector2i(2, 2)),
 			"attack": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "attack/sheet.png", 4, 4, 14, 0.036, false, _astrologer_attack_anchors()),
 			"skill1": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "skill1/sheet.png", 5, 5, 24, 0.1, false, _astrologer_skill1_anchors()),
 			"skill2": FrameAnimation.load_from_sprite_sheet(ASTROLOGER_ANI_DIR + "attack/sheet.png", 4, 4, 14, 0.036, false, _astrologer_attack_anchors()),
@@ -566,7 +566,7 @@ static func _skill2(owner: Fighter) -> Dictionary:
 				best_target = e
 		if best_target:
 			fire_x = best_target.pos_x + best_target.w / 2.0
-		var fire_anim = FrameAnimation.load_from_sprite_sheet(HEAVENLY_FIRE_SHEET, 4, 4, 15, 0.1, false)
+		var fire_anim = FrameAnimation.load_from_sprite_sheet(HEAVENLY_FIRE_SHEET, 4, 4, 15, 0.1, false, [], Vector2i(2, 2))
 		fire_anim.play()  # 必须 play，否则 update() 不推进帧，一直停在第0帧（极小火苗）；只播一遍定格末帧
 		fires.append({
 			"x": fire_x,
@@ -831,7 +831,7 @@ static func update_systems(owner: Fighter):
 						Fighter.apply_damage(e, f.damage / (WANDS_FIRE_FRAMES / 60.0), f.owner, false, Color(1.0, 0.4, 0.1), "hit_enemy", "astrologer_wands_fire", 0, 1)
 		# 生命结束 → 生成火焰区域（天火二段火堆）
 		if f.life <= 0:
-			var flame_anim = FrameAnimation.load_from_sprite_sheet(FLAME_ZONE_SHEET, 4, 4, 15, 0.1, true)
+			var flame_anim = FrameAnimation.load_from_sprite_sheet(FLAME_ZONE_SHEET, 4, 4, 15, 0.1, true, [], Vector2i(2, 2))
 			flame_anim.play()  # 必须 play，否则 update() 不推进帧
 			wands_flame_zones.append({
 				"x": f.x - WANDS_FIRE_W / 2.0,
